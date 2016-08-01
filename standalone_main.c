@@ -79,7 +79,7 @@ static int handleRequest(struct mg_connection *conn)
 	io.printf = io_mg_printf;
 	io.flush = io_mg_flush;
 	
-	git_lfs_server_handle_request(&io, requestInfo->request_method, requestInfo->uri);
+	git_lfs_server_handle_request(&options, &io, requestInfo->request_method, requestInfo->uri);
 	
 	return 1;
 }

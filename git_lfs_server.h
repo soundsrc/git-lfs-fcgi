@@ -17,6 +17,7 @@
 #define GIT_LFS_SERVER_H
 
 struct socket_io;
-void git_lfs_server_handle_request(const struct socket_io *io, const char *method, const char *uri);
+struct options;
+void git_lfs_server_handle_request(const struct options *options, const struct socket_io *io, const char *method, const char *uri);
 
 #endif
