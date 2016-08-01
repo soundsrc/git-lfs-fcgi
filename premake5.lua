@@ -55,8 +55,15 @@ solution "gif-lfs-server"
 		libdirs { "/usr/local/lib" }
 		files { 
 			"*.c",
-			"*.h"
+			"*.h",
+			"compat/*.h"
 		}
+		if not os.is("bsd") and not os.is("macosx") then
+			files { 
+				"compat/*.cpp", 
+				"compat/*.c",
+			}
+		end
 		excludes {
 			"fcgi_main.c"
 		}
