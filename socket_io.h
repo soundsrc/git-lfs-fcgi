@@ -24,6 +24,8 @@ struct socket_io
 	void *context;
 	int (*read)(void *context, void *buffer, int n);
 	int (*write)(void *context, const void *buffer, int n);
+	void (*write_http_status)(void *context, int code, const char *message);
+	int (*printf)(void *context, const char *format, ...);
 	void (*flush)(void *context);
 };
 

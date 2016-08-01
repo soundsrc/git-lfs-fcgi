@@ -21,6 +21,7 @@
 #include "compat/string.h"
 #include "options.h"
 #include "socket_io.h"
+#include "git_lfs_server.h"
 #include "mongoose.h"
 
 static struct mg_context *context = NULL;
@@ -32,6 +33,8 @@ static void intHandler(int sig)
 	running = 0;
 }
 
+extern int mg_vprintf(struct mg_connection *conn, const char *fmt, va_list ap);
+
 static int io_mg_read(void *context, void *buffer, int size)
 {
 	return mg_read((struct mg_connection *)context, buffer, size);
@@ -40,6 +43,23 @@ static int io_mg_read(void *context, void *buffer, int size)
 static int io_mg_write(void *context, const void *buffer, int size)
 {
 	return mg_write((struct mg_connection *)context, buffer, size);
+}
+
+static void io_mg_write_http_status(void *context, int code, const char *message)
+{
+	mg_printf((struct mg_connection *)context, "HTTP/1.1 %d %s\r\n", code, message);
+}
+
+static int io_mg_printf(void *context, const char *format, ...)
+{
+	va_list va;
+	int len;
+	
+	va_start(va, format);
+	len = mg_vprintf((struct mg_connection *)context, format, va);
+	va_end(va);
+	
+	return len;
 }
 
 static void io_mg_flush(void *context)
@@ -55,6 +75,8 @@ static int handleRequest(struct mg_connection *conn)
 	io.context = conn;
 	io.read = io_mg_read;
 	io.write = io_mg_write;
+	io.write_http_status = io_mg_write_http_status;
+	io.printf = io_mg_printf;
 	io.flush = io_mg_flush;
 	
 	git_lfs_server_handle_request(&io, requestInfo->request_method, requestInfo->uri);
