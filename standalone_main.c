@@ -94,12 +94,9 @@ int main(int argc, char *argv[])
 	};
 
 	memset(&options, 0, sizeof(options));
-	if(strlcpy(options.object_path, ".", sizeof(options.object_path)) >= sizeof(options.object_path))
-	{
-		fprintf(stderr, "Object path is too long.\n");
-		return -1;
-	}
-	
+	strlcpy(options.object_path, ".", sizeof(options.object_path));
+	strlcpy(options.scheme, "http", sizeof(options.scheme));
+	strlcpy(options.host, "localhost:8080", sizeof(options.scheme));
 	
 	memset(&callbacks,0,sizeof(callbacks));
 	callbacks.begin_request = handleRequest;
