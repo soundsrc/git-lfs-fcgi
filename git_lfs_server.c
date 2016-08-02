@@ -155,8 +155,15 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 		
 		if(op == git_lfs_operation_upload)
 		{
+			char upload_url[1024];
+
+			if(snprintf(upload_url, sizeof(upload_url), "%s://%s/upload/%s", options->scheme, options->host, oid) >= (long)sizeof(upload_url)) {
+				io->write_http_status(io->context, 400, "Invalid operation.");
+				goto error1;
+			}
+
 			struct json_object *upload = json_object_new_object();
-			json_object_object_add(upload, "href", json_object_new_string("http://localhost:8080/upload"));
+			json_object_object_add(upload, "href", json_object_new_string(upload_url));
 			json_object_object_add(actions, "upload", upload);
 		}
 		
@@ -174,6 +181,7 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 	io->write(io->context, headers, sizeof(headers) - 1);
 	io->write(io->context, response_json, strlen(response_json));
 	
+error1:
 	json_object_put(output_objects);
 	json_object_put(response_object);
 error0:
