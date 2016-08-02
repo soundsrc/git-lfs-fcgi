@@ -89,7 +89,7 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 	json_tokener * tokener = json_tokener_new();
 	struct json_object *root = NULL;
 	
-	while((n = io->read(io->context, buffer, sizeof(buffer))) >= 0)
+	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0)
 	{
 		root = json_tokener_parse_ex(tokener, buffer, n);
 		enum json_tokener_error err = json_tokener_get_error(tokener);
@@ -157,7 +157,7 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 		{
 			char upload_url[1024];
 
-			if(snprintf(upload_url, sizeof(upload_url), "%s://%s/upload/%s", options->scheme, options->host, oid) >= (long)sizeof(upload_url)) {
+			if(snprintf(upload_url, sizeof(upload_url), "%s://%s/upload/%s", options->scheme, options->host, json_object_get_string(oid)) >= (long)sizeof(upload_url)) {
 				io->write_http_status(io->context, 400, "Invalid operation.");
 				goto error1;
 			}
@@ -189,6 +189,19 @@ error0:
 	json_tokener_free(tokener);
 }
 
+static void git_lfs_upload(const struct options *options, const struct socket_io *io, const char *oid)
+{
+	char buffer[4096];
+	int n;
+	
+	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0) {
+		printf("%d\n", n);
+	}
+	
+	io->write_http_status(io->context, 200, "Ok");
+	io->write(io->context, "\r\n\r\n", 4);
+}
+
 void git_lfs_server_handle_request(const struct options *options, const struct socket_io *io, const char *method, const char *uri)
 {
 	if(strcmp(method, "GET") == 0)
@@ -198,6 +211,12 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 		{
 			git_lfs_server_get_object_metadata(options, io, uri + 9);
 		}
+	} else if(strcmp(method, "PUT") == 0) {
+		
+		if(strncmp(uri, "/upload/", 8) == 0) {
+			git_lfs_upload(options, io, uri + 8);
+		}
+
 	} else if(strcmp(method, "POST") == 0) {
 		
 		// v1 batch
