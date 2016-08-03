@@ -84,11 +84,12 @@ static int handleRequest(struct mg_connection *conn)
 	io.read = io_mg_read;
 	io.write = io_mg_write;
 	io.write_http_status = io_mg_write_http_status;
+	io.write_headers = io_mg_write_headers;
 	io.printf = io_mg_printf;
 	io.flush = io_mg_flush;
-	
+
 	git_lfs_server_handle_request(&options, &io, requestInfo->request_method, requestInfo->uri);
-	
+
 	return 1;
 }
 
@@ -105,7 +106,6 @@ int main(int argc, char *argv[])
 	strlcpy(options.object_path, ".", sizeof(options.object_path));
 	strlcpy(options.scheme, "http", sizeof(options.scheme));
 	strlcpy(options.host, "localhost:8080", sizeof(options.scheme));
-	strlcpy(options.cachePath, ".", sizeof(options.cachePath));
 	
 	
 	memset(&callbacks,0,sizeof(callbacks));
