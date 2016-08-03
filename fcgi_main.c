@@ -75,8 +75,8 @@ static void io_fcgi_flush(void *context)
 
 int main(int argc, char *argv[])
 {
-    const char socket[] = ":9000";
-    int maxConnections = 400;
+    char socket_path[PATH_MAX] = ":8080";
+    int max_connections = 400;
 
 	static struct option long_options[] =
 	{
@@ -111,6 +111,7 @@ int main(int argc, char *argv[])
 					fprintf(stderr, "Invalid port number.\n");
 					return -1;
 				}
+				snprintf(socket_path, sizeof(socket_path), ":%d", port);
 				break;
 			}
 			default:
@@ -123,6 +124,7 @@ int main(int argc, char *argv[])
 						printf("     --hostname=HOST     Hostname of this server (i.e. localhost:8080)\n");
 						printf(" -p, --port=PORT         Port to listen (default: 8080)\n");
 						printf("     --object-dir=PATH   Path to a directory where to store the objects (default: current directory)\n");
+						printf("     --socket=PATH       Path to socket (overrides port).\n");
 						break;
 					case 2: /* hostname */
 						if(strlcpy(options.host, optarg, sizeof(options.host)) >= sizeof(options.host))
@@ -152,6 +154,14 @@ int main(int argc, char *argv[])
 							return -1;
 						}
 					}
+					case 5: /* socket */
+					{
+						if(strlcpy(socket_path, optarg, sizeof(socket_path)) >= sizeof(socket_path))
+						{
+							fprintf(stderr, "Invalid socket path. Too long.\n");
+							return -1;
+						}
+					}
 						break;
 						
 				}
@@ -162,13 +172,13 @@ int main(int argc, char *argv[])
 
 	FCGX_Init();
 
-    int listeningSocket = FCGX_OpenSocket(socket, maxConnections);
-	if(listeningSocket < 0) {
+    int listening_socket = FCGX_OpenSocket(socket_path, max_connections);
+	if(listening_socket < 0) {
 		fprintf(stderr, "Failed to create socket.");
 		exit(1);
 	}
 
-	FCGX_InitRequest(&request, listeningSocket, 0);
+	FCGX_InitRequest(&request, listening_socket, 0);
 
     while (FCGX_Accept_r(&request) == 0) {
 
@@ -183,13 +193,13 @@ int main(int argc, char *argv[])
 		io.printf = io_fcgi_printf;
 		io.flush = io_fcgi_flush;
 
-		const char *requestMethod = FCGX_GetParam("REQUEST_METHOD", request.envp);
-		const char *documentUri = FCGX_GetParam("DOCUMENT_URI", request.envp);
-		const char *queryString = FCGX_GetParam("QUERY_STRING", request.envp);
+		const char *request_method = FCGX_GetParam("REQUEST_METHOD", request.envp);
+		const char *document_uri = FCGX_GetParam("DOCUMENT_URI", request.envp);
+		//const char *queryString = FCGX_GetParam("QUERY_STRING", request.envp);
 
-		const char *endPoint = strrchr(documentUri, '/');
-		if(endPoint) {
-			git_lfs_server_handle_request(&options, &io, requestMethod, endPoint);
+		const char *end_point = strrchr(document_uri, '/');
+		if(end_point) {
+			git_lfs_server_handle_request(&options, &io, request_method, end_point);
 		}
 
 		FCGX_Finish_r(&request);
