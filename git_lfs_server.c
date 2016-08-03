@@ -52,8 +52,9 @@ static void git_lfs_write_error(const struct socket_io *io, int error_code, cons
 {
 	const char *error_reason = "Unknown error";
 	switch(error_code) {
-		case 400: error_reason = "Not Found"; break;
-		case 404: error_reason = "Bad Request"; break;
+		case 400: error_reason = "Bad Request"; break;
+		case 404: error_reason = "Not Found"; break;
+		case 422: error_reason = "Unprocessable Entity"; break;
 		case 500: error_reason = "Internal Server Error"; break;
 		case 501: error_reason = "Not Implemented"; break;
 	}
