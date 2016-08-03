@@ -184,16 +184,18 @@ static void git_lfs_write_error(const struct socket_io *io, int error_code, cons
 	switch(error_code) {
 		case 400: error_reason = "Not Found"; break;
 		case 404: error_reason = "Bad Request"; break;
+		case 500: error_reason = "Internal Server Error"; break;
+		case 501: error_reason = "Not Implemented"; break;
 	}
 	
 	io->write_http_status(io->context, error_code, error_reason);
 	
 	json_object *error = json_object_new_object();
-	json_object_array_add(error, json_object_new_string(message));
+	json_object_object_add(error, "message", json_object_new_string(message));
 	
 	char content_length[64];
-	int length = json_object_get_string_len(error);
 	const char *body = json_object_get_string(error);
+	int length = strlen(body);
 	
 	snprintf(content_length, sizeof(content_length), "Content-Length: %d", length);
 	const char *headers[] = {
@@ -322,12 +324,16 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 	{
 		if(strncmp(uri, "/download/", 10) == 0) {
 			git_lfs_download(options, io, uri + 10);
+		} else {
+			git_lfs_write_error(io, 501, "End point not supported.");
 		}
 		
 	} else if(strcmp(method, "PUT") == 0) {
 		
 		if(strncmp(uri, "/upload/", 8) == 0) {
 			git_lfs_upload(options, io, uri + 8);
+		} else {
+			git_lfs_write_error(io, 501, "End point not supported.");
 		}
 
 	} else if(strcmp(method, "POST") == 0) {
@@ -336,6 +342,11 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 		if(strcmp(uri, "/objects/batch") == 0)
 		{
 			git_lfs_server_handle_batch(options, io);
+		} else {
+			git_lfs_write_error(io, 501, "End point not supported.");
 		}
+		
+	} else {
+		git_lfs_write_error(io, 501, "HTTP method not supported.");
 	}
 }
