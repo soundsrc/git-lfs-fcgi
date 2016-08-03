@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include "json.h"
 #include "compat/string.h"
@@ -30,6 +31,22 @@ typedef enum git_lfs_operation_type
 	git_lfs_operation_upload,
 	git_lfs_operation_download
 } git_lfs_operation;
+
+// oid's are hashes, only sha256 is defined
+static int is_valid_oid(const char *oid)
+{
+	if(strnlen(oid, 65) != 64) return 0;
+	
+	for(int i = 0; i < 64; i++) {
+		if(!((oid[i] >= '0' && oid[i] <= '9') ||
+		   (oid[i] >='a' && oid[i] <= 'f')))
+		{
+			return 0;
+		}
+	}
+	
+	return 1;
+}
 
 static void git_lfs_server_handle_batch(const struct options *options, const struct socket_io *io)
 {
@@ -106,17 +123,17 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 		
 		switch(op) {
 			case git_lfs_operation_upload:
-		{
-			char upload_url[1024];
+			{
+				char upload_url[1024];
 
-			if(snprintf(upload_url, sizeof(upload_url), "%s://%s/upload/%s", options->scheme, options->host, json_object_get_string(oid)) >= (long)sizeof(upload_url)) {
-				io->write_http_status(io->context, 400, "Invalid operation.");
-				goto error1;
-			}
+				if(snprintf(upload_url, sizeof(upload_url), "%s://%s/upload/%s", options->scheme, options->host, json_object_get_string(oid)) >= (long)sizeof(upload_url)) {
+					io->write_http_status(io->context, 400, "Invalid operation.");
+					goto error1;
+				}
 
-			struct json_object *upload = json_object_new_object();
-			json_object_object_add(upload, "href", json_object_new_string(upload_url));
-			json_object_object_add(actions, "upload", upload);
+				struct json_object *upload = json_object_new_object();
+				json_object_object_add(upload, "href", json_object_new_string(upload_url));
+				json_object_object_add(actions, "upload", upload);
 				break;
 			}
 			
@@ -161,26 +178,81 @@ error0:
 	json_tokener_free(tokener);
 }
 
+static void git_lfs_write_error(const struct options *options, const struct socket_io *io, int error_code, const char *message)
+{
+	const char *error_reason = "Unknown error";
+	switch(error_code) {
+		case 400: error_reason = "Not Found"; break;
+		case 404: error_reason = "Bad Request"; break;
+	}
+	
+	io->write_http_status(io->context, error_code, error_reason);
+	
+	json_object *error = json_object_new_object();
+	json_object_array_add(error, json_object_new_string(message));
+	
+	char content_length[64];
+	int length = json_object_get_string_len(error);
+	const char *body = json_object_get_string(error);
+	
+	snprintf(content_length, sizeof(content_length), "Content-Length: %d", length);
+	const char *headers[] = {
+		"Content-Type: application/vnd.git-lfs+json",
+		content_length
+	};
+	
+	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
+	io->write(io->context, body, length);
+	
+	json_object_put(error);
+}
+
 static void git_lfs_download(const struct options *options, const struct socket_io *io, const char *oid)
 {
-	char buffer[4096], content_length[64];
+	char buffer[4096];
 	int n;
-	char objectPath[PATH_MAX];
+	char object_path[PATH_MAX];
 	
-	if(snprintf(objectPath, sizeof(objectPath), "%s/%.2s/%s", options->cachePath, oid, oid) >= (long)sizeof(objectPath))
+	if(!is_valid_oid(oid)) {
+		git_lfs_write_error(options, io, 400, "Object ID is not valid.");
+		return;
+	}
+
+	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/%s", options->object_path, oid, oid) >= (long)sizeof(object_path))
 	{
-		io->write_http_status(io->context, 400, "Cache path is too long");
+		git_lfs_write_error(options, io, 400, "Object path is too long.");
 		return;
 	}
-	
-	FILE *fp = fopen(objectPath, "rb");
+
+	struct stat st;
+	if(stat(object_path, &st) < 0)
+	{
+		switch(errno) {
+			case ENOENT:
+				git_lfs_write_error(options, io, 404, "Object was not found.");
+				return;
+			case EACCES:
+				git_lfs_write_error(options, io, 403, "Permission to access object was denied.");
+				return;
+			default:
+				git_lfs_write_error(options, io, 400, "Error accessing object.");
+				return;
+		}
+		
+		return;
+	}
+
+	FILE *fp = fopen(object_path, "rb");
 	if(!fp) {
-		io->write_http_status(io->context, 404, "Not found");
+		git_lfs_write_error(options, io, 404, "Object was not found.");
 		return;
 	}
-	
+
+	char content_length[64];
+	snprintf(content_length, sizeof(content_length), "Content-Length: %lld", st.st_size);
 	const char *headers[] = {
 		"Content-Type: application/octet-stream",
+		content_length
 	};
 
 	io->write_http_status(io->context, 200, "OK");
@@ -197,39 +269,39 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 {
 	char buffer[4096];
 	int n;
-	char cachePath[PATH_MAX], tmpCachePath[PATH_MAX];
+	char object_path[PATH_MAX], tmp_object_path[PATH_MAX];
 	
-	if(snprintf(cachePath, sizeof(cachePath), "%s/%.2s/", options->cachePath, oid) >= (long)sizeof(cachePath))
+	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/", options->object_path, oid) >= (long)sizeof(object_path))
 	{
-		io->write_http_status(io->context, 400, "Cache path is too long");
+		git_lfs_write_error(options, io, 400, "Object path is too long.");
 		return;
 	}
 	
-	if(access(cachePath, F_OK) != 0)
+	if(access(object_path, F_OK) != 0)
 	{
-		mkdir(cachePath, 0700);
+		mkdir(object_path, 0700);
 	}
 	
-	if(strlcat(cachePath, oid, sizeof(cachePath)) >= sizeof(cachePath))
+	if(strlcat(object_path, oid, sizeof(object_path)) >= sizeof(object_path))
 	{
-		io->write_http_status(io->context, 400, "Cache path is too long");
+		git_lfs_write_error(options, io, 400, "Object path is too long.");
 		return;
 	}
 	
-	if(strlcpy(tmpCachePath, cachePath, sizeof(tmpCachePath)) >= sizeof(tmpCachePath) ||
-	   strlcat(tmpCachePath, "-tmp", sizeof(tmpCachePath)) >= sizeof(tmpCachePath))
+	if(strlcpy(tmp_object_path, object_path, sizeof(tmp_object_path)) >= sizeof(tmp_object_path) ||
+	   strlcat(tmp_object_path, "-tmp", sizeof(tmp_object_path)) >= sizeof(tmp_object_path))
 	{
-		io->write_http_status(io->context, 400, "Cache path is too long");
+		git_lfs_write_error(options, io, 400, "Object path is too long.");
 		return;
 	}
 	
 	
-	FILE *fp = fopen(tmpCachePath, "wb");
+	FILE *fp = fopen(tmp_object_path, "wb");
 	if(!fp) {
-		io->write_http_status(io->context, 400, "Cache write fail.");
+		git_lfs_write_error(options, io, 400, "Failed to write to storage.");
 		return;
 	}
-	
+
 	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0) {
 		fwrite(buffer, 1, n, fp);
 	}
@@ -238,10 +310,10 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 	
 	// TODO: verify written data
 	
-	rename(tmpCachePath, cachePath);
+	rename(tmp_object_path, object_path);
 	
-	io->write_http_status(io->context, 200, "Ok");
-	io->write(io->context, "\r\n\r\n", 4);
+	io->write_http_status(io->context, 200, "OK");
+	io->write_headers(io->context, NULL, 0);
 }
 
 void git_lfs_server_handle_request(const struct options *options, const struct socket_io *io, const char *method, const char *uri)
