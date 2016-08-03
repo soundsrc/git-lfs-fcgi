@@ -27,7 +27,8 @@
 typedef enum git_lfs_operation_type
 {
 	git_lfs_operation_unknown,
-	git_lfs_operation_upload
+	git_lfs_operation_upload,
+	git_lfs_operation_download
 } git_lfs_operation;
 
 static void git_lfs_server_handle_batch(const struct options *options, const struct socket_io *io)
@@ -61,6 +62,8 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 	const char *operation_string = json_object_get_string(operation);
 	if(strcmp(operation_string, "upload") == 0) {
 		op = git_lfs_operation_upload;
+	} else if(strcmp(operation_string, "download") == 0) {
+		op = git_lfs_operation_download;
 	} else {
 		io->write_http_status(io->context, 400, "Unknown operation.");
 		goto error0;
@@ -101,7 +104,8 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 		json_object_object_add(out, "size", json_object_get(size));
 		struct json_object *actions = json_object_new_object();
 		
-		if(op == git_lfs_operation_upload)
+		switch(op) {
+			case git_lfs_operation_upload:
 		{
 			char upload_url[1024];
 
@@ -113,6 +117,26 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 			struct json_object *upload = json_object_new_object();
 			json_object_object_add(upload, "href", json_object_new_string(upload_url));
 			json_object_object_add(actions, "upload", upload);
+				break;
+			}
+			
+			case git_lfs_operation_download:
+			{
+				char download_url[1024];
+				
+				if(snprintf(download_url, sizeof(download_url), "%s://%s/download/%s", options->scheme, options->host, json_object_get_string(oid)) >= (long)sizeof(download_url)) {
+					io->write_http_status(io->context, 400, "Invalid operation.");
+					goto error1;
+				}
+				
+				struct json_object *download = json_object_new_object();
+				json_object_object_add(download, "href", json_object_new_string(download_url));
+				json_object_object_add(actions, "download", download);
+				break;
+			}
+			
+			default:
+				break;
 		}
 		
 		json_object_object_add(out, "actions", actions);
@@ -135,6 +159,38 @@ error1:
 error0:
 	if(root) json_object_put(root);
 	json_tokener_free(tokener);
+}
+
+static void git_lfs_download(const struct options *options, const struct socket_io *io, const char *oid)
+{
+	char buffer[4096], content_length[64];
+	int n;
+	char objectPath[PATH_MAX];
+	
+	if(snprintf(objectPath, sizeof(objectPath), "%s/%.2s/%s", options->cachePath, oid, oid) >= (long)sizeof(objectPath))
+	{
+		io->write_http_status(io->context, 400, "Cache path is too long");
+		return;
+	}
+	
+	FILE *fp = fopen(objectPath, "rb");
+	if(!fp) {
+		io->write_http_status(io->context, 404, "Not found");
+		return;
+	}
+	
+	const char *headers[] = {
+		"Content-Type: application/octet-stream",
+	};
+
+	io->write_http_status(io->context, 200, "OK");
+	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
+
+	while((n = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+		io->write(io->context, buffer, n);
+	}
+	
+	fclose(fp);
 }
 
 static void git_lfs_upload(const struct options *options, const struct socket_io *io, const char *oid)
@@ -192,6 +248,9 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 {
 	if(strcmp(method, "GET") == 0)
 	{
+		if(strncmp(uri, "/download/", 10) == 0) {
+			git_lfs_download(options, io, uri + 10);
+		}
 		
 	} else if(strcmp(method, "PUT") == 0) {
 		
