@@ -1,4 +1,4 @@
-solution "gif-lfs-server"
+solution "git-lfs-server"
 	configurations { "Debug", "Release" }
 	configuration "Debug"
 		flags { "ExtraWarnings", "Symbols" }
@@ -56,7 +56,7 @@ solution "gif-lfs-server"
 			"external/libfcgi/libfcgi/os_unix.c",
 		}
 
-	project "gif-lfs-server-standalone"
+	project "git-lfs-server-standalone"
 		kind "ConsoleApp"
 		language "C"
 		includedirs { 
@@ -80,7 +80,7 @@ solution "gif-lfs-server"
 			"fcgi_main.c"
 		}
 		links { "mongoose", "json-c" }
-	project "gif-lfs-server-fcgi"
+	project "git-lfs-server-fcgi"
 		kind "ConsoleApp"
 		language "C"
 		includedirs { 
