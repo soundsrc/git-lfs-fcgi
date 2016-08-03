@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 #include <unistd.h>
 #include <errno.h>
 #include <sys/stat.h>
@@ -275,7 +276,7 @@ static void git_lfs_download(const struct options *options, const struct socket_
 	}
 
 	char content_length[64];
-	snprintf(content_length, sizeof(content_length), "Content-Length: %lld", st.st_size);
+	snprintf(content_length, sizeof(content_length), "Content-Length: %lld", (int64_t)st.st_size);
 	const char *headers[] = {
 		"Content-Type: application/octet-stream",
 		content_length
