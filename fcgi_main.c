@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
 							return -1;
 						}
 						
-						if(!(st.st_mode & S_IFDIR))
+						if(!S_ISDIR(st.st_mode))
 						{
 							fprintf(stderr, "%s: Path is not a valid directory.\n", options.object_path);
 							return -1;
