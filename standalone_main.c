@@ -50,6 +50,14 @@ static void io_mg_write_http_status(void *context, int code, const char *message
 	mg_printf((struct mg_connection *)context, "HTTP/1.1 %d %s\r\n", code, message);
 }
 
+static void io_mg_write_headers(void *context, const char * const *headers, int num_headers)
+{
+	for(int i = 0; i < num_headers; i++) {
+		mg_printf((struct mg_connection *)context, "%s\r\n", headers[i]);
+	}
+	mg_write((struct mg_connection *)context, "\r\n", 2);
+}
+
 static int io_mg_printf(void *context, const char *format, ...)
 {
 	va_list va;
