@@ -178,7 +178,7 @@ error0:
 	json_tokener_free(tokener);
 }
 
-static void git_lfs_write_error(const struct options *options, const struct socket_io *io, int error_code, const char *message)
+static void git_lfs_write_error(const struct socket_io *io, int error_code, const char *message)
 {
 	const char *error_reason = "Unknown error";
 	switch(error_code) {
@@ -214,13 +214,13 @@ static void git_lfs_download(const struct options *options, const struct socket_
 	char object_path[PATH_MAX];
 	
 	if(!is_valid_oid(oid)) {
-		git_lfs_write_error(options, io, 400, "Object ID is not valid.");
+		git_lfs_write_error(io, 400, "Object ID is not valid.");
 		return;
 	}
 
 	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/%s", options->object_path, oid, oid) >= (long)sizeof(object_path))
 	{
-		git_lfs_write_error(options, io, 400, "Object path is too long.");
+		git_lfs_write_error(io, 400, "Object path is too long.");
 		return;
 	}
 
@@ -229,13 +229,13 @@ static void git_lfs_download(const struct options *options, const struct socket_
 	{
 		switch(errno) {
 			case ENOENT:
-				git_lfs_write_error(options, io, 404, "Object was not found.");
+				git_lfs_write_error(io, 404, "Object was not found.");
 				return;
 			case EACCES:
-				git_lfs_write_error(options, io, 403, "Permission to access object was denied.");
+				git_lfs_write_error(io, 403, "Permission to access object was denied.");
 				return;
 			default:
-				git_lfs_write_error(options, io, 400, "Error accessing object.");
+				git_lfs_write_error(io, 400, "Error accessing object.");
 				return;
 		}
 		
@@ -244,7 +244,7 @@ static void git_lfs_download(const struct options *options, const struct socket_
 
 	FILE *fp = fopen(object_path, "rb");
 	if(!fp) {
-		git_lfs_write_error(options, io, 404, "Object was not found.");
+		git_lfs_write_error(io, 404, "Object was not found.");
 		return;
 	}
 
@@ -273,7 +273,7 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 	
 	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/", options->object_path, oid) >= (long)sizeof(object_path))
 	{
-		git_lfs_write_error(options, io, 400, "Object path is too long.");
+		git_lfs_write_error(io, 400, "Object path is too long.");
 		return;
 	}
 	
@@ -284,21 +284,21 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 	
 	if(strlcat(object_path, oid, sizeof(object_path)) >= sizeof(object_path))
 	{
-		git_lfs_write_error(options, io, 400, "Object path is too long.");
+		git_lfs_write_error(io, 400, "Object path is too long.");
 		return;
 	}
 	
 	if(strlcpy(tmp_object_path, object_path, sizeof(tmp_object_path)) >= sizeof(tmp_object_path) ||
 	   strlcat(tmp_object_path, "-tmp", sizeof(tmp_object_path)) >= sizeof(tmp_object_path))
 	{
-		git_lfs_write_error(options, io, 400, "Object path is too long.");
+		git_lfs_write_error(io, 400, "Object path is too long.");
 		return;
 	}
 	
 	
 	FILE *fp = fopen(tmp_object_path, "wb");
 	if(!fp) {
-		git_lfs_write_error(options, io, 400, "Failed to write to storage.");
+		git_lfs_write_error(io, 400, "Failed to write to storage.");
 		return;
 	}
 
