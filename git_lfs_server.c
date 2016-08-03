@@ -24,60 +24,6 @@
 #include "socket_io.h"
 #include "git_lfs_server.h"
 
-static struct json_object * git_lfs_server_get_object_metadata(const struct options *options, const struct socket_io *io, const char *object_id)
-{
-	char object_path[PATH_MAX];
-	FILE *fp;
-	
-	if(strlcpy(object_path, options->object_path, sizeof(object_path)) >= sizeof(object_path))
-		goto toolong;
-	if(strlcat(object_path, "/", sizeof(object_path)) >= sizeof(object_path))
-		goto toolong;
-	if(strlcat(object_path, object_id, sizeof(object_path)) >= sizeof(object_path))
-		goto toolong;
-	
-	fp = fopen(object_path, "rb");
-	if(!fp) {
-		fseek(fp, 0L, SEEK_END);
-		long size = ftell(fp);
-		fseek(fp, 0L, SEEK_SET);
-
-		struct json_object *obj = json_object_new_object();
-		json_object_object_add(obj, "oid", json_object_new_string(object_id));
-		json_object_object_add(obj, "size", json_object_new_int64(size));
-		
-		struct json_object *links = json_object_new_object();
-		struct json_object *self = json_object_new_object();
-		
-		char url[PATH_MAX];
-		if(snprintf(url, sizeof(url), "%s://%s/objects/%s", options->scheme, options->host, object_id) >= sizeof(url)) {
-			fprintf(stderr, "error: Cannot retrive object because the url is too long.\n");
-			return NULL;
-		}
-		
-		json_object_object_add(self, "href", json_object_new_string(url));
-		struct json_object *download = json_object_new_object();
-		
-		if(snprintf(url, sizeof(url), "%s://%s/files/%s", options->scheme, options->host, object_id) >= sizeof(url)) {
-			fprintf(stderr, "error: Cannot retrive object because the url is too long.\n");
-			return NULL;
-		}
-		json_object_object_add(download, "href", json_object_new_string(url));
-		
-		json_object_object_add(links, "self", self);
-		json_object_object_add(links, "download", download);
-		json_object_object_add(obj, "_links", links);
-		
-		fclose(fp);
-		
-		return obj;
-	}
-
-toolong:
-	fprintf(stderr, "error: Cannot retrive object because the object path is too long.\n");
-	return NULL;
-}
-
 typedef enum git_lfs_operation_type
 {
 	git_lfs_operation_unknown,
@@ -208,7 +154,7 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 		mkdir(cachePath, 0700);
 	}
 	
-	if(strlcat(cachePath, oid + 2, sizeof(cachePath)) >= sizeof(cachePath))
+	if(strlcat(cachePath, oid, sizeof(cachePath)) >= sizeof(cachePath))
 	{
 		io->write_http_status(io->context, 400, "Cache path is too long");
 		return;
@@ -246,11 +192,7 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 {
 	if(strcmp(method, "GET") == 0)
 	{
-		// v1 /objects/[oid]
-		if(strncmp(uri, "/objects/", 9) == 0)
-		{
-			git_lfs_server_get_object_metadata(options, io, uri + 9);
-		}
+		
 	} else if(strcmp(method, "PUT") == 0) {
 		
 		if(strncmp(uri, "/upload/", 8) == 0) {
