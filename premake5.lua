@@ -44,6 +44,18 @@ solution "gif-lfs-server"
 			"external/json-c/random_seed.h"
 		}
 
+	project "libfcgi"
+		kind "StaticLib"
+		language "C"
+		includedirs {
+			"external/libfcgi/include",
+		}
+		files {
+			"external/libfcgi/libfcgi/fcgiapp.c",
+			"external/libfcgi/libfcgi/fcgi_stdio.c",
+			"external/libfcgi/libfcgi/os_unix.c",
+		}
+
 	project "gif-lfs-server-standalone"
 		kind "ConsoleApp"
 		language "C"
@@ -68,3 +80,28 @@ solution "gif-lfs-server"
 			"fcgi_main.c"
 		}
 		links { "mongoose", "json-c" }
+	project "gif-lfs-server-fcgi"
+		kind "ConsoleApp"
+		language "C"
+		includedirs { 
+			"external/json-c",
+			"external/mongoose",
+			"external/libfcgi/include",
+			"/usr/local/include",
+		}
+		libdirs { "/usr/local/lib" }
+		files { 
+			"*.c",
+			"*.h",
+			"compat/*.h"
+		}
+		if not os.is("bsd") and not os.is("macosx") then
+			files { 
+				"compat/*.cpp", 
+				"compat/*.c",
+			}
+		end
+		excludes {
+			"standalone_main.c"
+		}
+		links { "mongoose", "json-c", "libfcgi" }
