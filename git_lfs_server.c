@@ -48,136 +48,6 @@ static int is_valid_oid(const char *oid)
 	return 1;
 }
 
-static void git_lfs_server_handle_batch(const struct options *options, const struct socket_io *io)
-{
-	char buffer[4096];
-	int n;
-	json_tokener * tokener = json_tokener_new();
-	struct json_object *root = NULL;
-	
-	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0)
-	{
-		root = json_tokener_parse_ex(tokener, buffer, n);
-		enum json_tokener_error err = json_tokener_get_error(tokener);
-		if(err == json_tokener_success) break;
-		if(err != json_tokener_continue) {
-			io->write_http_status(io->context, 400, "Invalid operation.");
-			goto error0;
-		}
-	}
-	
-	struct json_object *operation;
-	if(!json_object_object_get_ex(root, "operation", &operation) ||
-	   !json_object_is_type(operation, json_type_string))
-	{
-		io->write_http_status(io->context, 400, "Invalid operation.");
-		goto error0;
-	}
-	
-	
-	git_lfs_operation op = git_lfs_operation_unknown;
-	const char *operation_string = json_object_get_string(operation);
-	if(strcmp(operation_string, "upload") == 0) {
-		op = git_lfs_operation_upload;
-	} else if(strcmp(operation_string, "download") == 0) {
-		op = git_lfs_operation_download;
-	} else {
-		io->write_http_status(io->context, 400, "Unknown operation.");
-		goto error0;
-	}
-	
-	struct json_object *objects;
-	if(!json_object_object_get_ex(root, "objects", &objects)
-	   || !json_object_is_type(objects, json_type_array))
-	{
-		io->write_http_status(io->context, 400, "Invalid operation.");
-		goto error0;
-	}
-	
-	struct json_object *response_object = json_object_new_object();
-	struct json_object *output_objects = json_object_new_array();
-	
-	struct array_list *obj_list = json_object_get_array(objects);
-	int obj_count = array_list_length(obj_list);
-	for(int i = 0; i < obj_count; i++) {
-		struct json_object * obj = array_list_get_idx(obj_list, i);
-		if(!json_object_is_type(obj, json_type_object)) {
-			io->write_http_status(io->context, 400, "Invalid operation.");
-			goto error0;
-		}
-		
-		struct json_object *oid, *size;
-		if(!json_object_object_get_ex(obj, "oid", &oid) ||
-		   !json_object_is_type(oid, json_type_string) ||
-		   !json_object_object_get_ex(obj, "size", &size) ||
-		   !json_object_is_type(size, json_type_int))
-		{
-			io->write_http_status(io->context, 400, "Invalid operation.");
-			goto error0;
-		}
-		
-		struct json_object *out = json_object_new_object();
-		json_object_object_add(out, "oid", json_object_get(oid));
-		json_object_object_add(out, "size", json_object_get(size));
-		struct json_object *actions = json_object_new_object();
-		
-		switch(op) {
-			case git_lfs_operation_upload:
-			{
-				char upload_url[1024];
-
-				if(snprintf(upload_url, sizeof(upload_url), "%s://%s/upload/%s", options->scheme, options->host, json_object_get_string(oid)) >= (long)sizeof(upload_url)) {
-					io->write_http_status(io->context, 400, "Invalid operation.");
-					goto error1;
-				}
-
-				struct json_object *upload = json_object_new_object();
-				json_object_object_add(upload, "href", json_object_new_string(upload_url));
-				json_object_object_add(actions, "upload", upload);
-				break;
-			}
-			
-			case git_lfs_operation_download:
-			{
-				char download_url[1024];
-				
-				if(snprintf(download_url, sizeof(download_url), "%s://%s/download/%s", options->scheme, options->host, json_object_get_string(oid)) >= (long)sizeof(download_url)) {
-					io->write_http_status(io->context, 400, "Invalid operation.");
-					goto error1;
-				}
-				
-				struct json_object *download = json_object_new_object();
-				json_object_object_add(download, "href", json_object_new_string(download_url));
-				json_object_object_add(actions, "download", download);
-				break;
-			}
-			
-			default:
-				break;
-		}
-		
-		json_object_object_add(out, "actions", actions);
-		
-		json_object_array_add(output_objects, out);
-	}
-	
-	json_object_object_add(response_object, "objects", json_object_get(output_objects));
-	
-	
-	const char *response_json = json_object_get_string(response_object);
-	const char headers[] = "Content-Type: application/vnd.git-lfs+json\r\n\r\n";
-	io->write_http_status(io->context, 200, "Ok");
-	io->write(io->context, headers, sizeof(headers) - 1);
-	io->write(io->context, response_json, strlen(response_json));
-	
-error1:
-	json_object_put(output_objects);
-	json_object_put(response_object);
-error0:
-	if(root) json_object_put(root);
-	json_tokener_free(tokener);
-}
-
 static void git_lfs_write_error(const struct socket_io *io, int error_code, const char *message)
 {
 	const char *error_reason = "Unknown error";
@@ -207,6 +77,145 @@ static void git_lfs_write_error(const struct socket_io *io, int error_code, cons
 	io->write(io->context, body, length);
 	
 	json_object_put(error);
+}
+
+static void git_lfs_server_handle_batch(const struct options *options, const struct socket_io *io)
+{
+	char buffer[4096];
+	int n;
+	json_tokener * tokener = json_tokener_new();
+	struct json_object *root = NULL;
+	
+	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0)
+	{
+		root = json_tokener_parse_ex(tokener, buffer, n);
+		enum json_tokener_error err = json_tokener_get_error(tokener);
+		if(err == json_tokener_success) break;
+		if(err != json_tokener_continue) {
+			git_lfs_write_error(io, 400, "JSON parsing error.");
+			goto error0;
+		}
+	}
+	
+	struct json_object *operation;
+	if(!json_object_object_get_ex(root, "operation", &operation) ||
+	   !json_object_is_type(operation, json_type_string))
+	{
+		git_lfs_write_error(io, 400, "API error. Missing operation.");
+		goto error0;
+	}
+	
+	
+	git_lfs_operation op = git_lfs_operation_unknown;
+	const char *operation_string = json_object_get_string(operation);
+	if(strcmp(operation_string, "upload") == 0) {
+		op = git_lfs_operation_upload;
+	} else if(strcmp(operation_string, "download") == 0) {
+		op = git_lfs_operation_download;
+	} else {
+		git_lfs_write_error(io, 400, "Unknown operation.");
+		goto error0;
+	}
+	
+	struct json_object *objects;
+	if(!json_object_object_get_ex(root, "objects", &objects)
+	   || !json_object_is_type(objects, json_type_array))
+	{
+		git_lfs_write_error(io, 400, "API error. Missing objects.");
+		goto error0;
+	}
+	
+	struct json_object *response_object = json_object_new_object();
+	struct json_object *output_objects = json_object_new_array();
+	
+	struct array_list *obj_list = json_object_get_array(objects);
+	int obj_count = array_list_length(obj_list);
+	for(int i = 0; i < obj_count; i++) {
+		struct json_object * obj = array_list_get_idx(obj_list, i);
+		if(!json_object_is_type(obj, json_type_object)) {
+			git_lfs_write_error(io, 400, "API error. Invalid object in stream.");
+			goto error1;
+		}
+		
+		struct json_object *oid, *size;
+		if(!json_object_object_get_ex(obj, "oid", &oid) ||
+		   !json_object_is_type(oid, json_type_string) ||
+		   !json_object_object_get_ex(obj, "size", &size) ||
+		   !json_object_is_type(size, json_type_int))
+		{
+			git_lfs_write_error(io, 400, "API error. Missing oid and size.");
+			goto error1;
+		}
+		
+		struct json_object *out = json_object_new_object();
+		json_object_object_add(out, "oid", json_object_get(oid));
+		json_object_object_add(out, "size", json_object_get(size));
+		struct json_object *actions = json_object_new_object();
+		
+		switch(op) {
+			case git_lfs_operation_upload:
+			{
+				char upload_url[1024];
+
+				if(snprintf(upload_url, sizeof(upload_url), "%s://%s/upload/%s", options->scheme, options->host, json_object_get_string(oid)) >= (long)sizeof(upload_url)) {
+					git_lfs_write_error(io, 400, "Upload URL is too long.");
+					json_object_put(actions);
+					json_object_put(out);
+					goto error1;
+				}
+
+				struct json_object *upload = json_object_new_object();
+				json_object_object_add(upload, "href", json_object_new_string(upload_url));
+				json_object_object_add(actions, "upload", upload);
+				break;
+			}
+			
+			case git_lfs_operation_download:
+			{
+				char download_url[1024];
+				
+				if(snprintf(download_url, sizeof(download_url), "%s://%s/download/%s", options->scheme, options->host, json_object_get_string(oid)) >= (long)sizeof(download_url)) {
+					git_lfs_write_error(io, 400, "Download URL is too long.");
+					json_object_put(actions);
+					json_object_put(out);
+					goto error1;
+				}
+				
+				struct json_object *download = json_object_new_object();
+				json_object_object_add(download, "href", json_object_new_string(download_url));
+				json_object_object_add(actions, "download", download);
+				break;
+			}
+			
+			default:
+				break;
+		}
+		
+		json_object_object_add(out, "actions", actions);
+		json_object_array_add(output_objects, out);
+	}
+	
+	json_object_object_add(response_object, "objects", json_object_get(output_objects));
+
+	const char *response_json = json_object_get_string(response_object);
+	int length = strlen(response_json);
+	char content_length[64];
+	snprintf(content_length, sizeof(content_length), "Content-Length: %d", length);
+	const char *headers[] = {
+		"Content-Type: application/vnd.git-lfs+json",
+		content_length
+	};
+
+	io->write_http_status(io->context, 200, "OK");
+	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
+	io->write(io->context, response_json, strlen(response_json));
+	
+error1:
+	json_object_put(output_objects);
+	json_object_put(response_object);
+error0:
+	if(root) json_object_put(root);
+	json_tokener_free(tokener);
 }
 
 static void git_lfs_download(const struct options *options, const struct socket_io *io, const char *oid)
