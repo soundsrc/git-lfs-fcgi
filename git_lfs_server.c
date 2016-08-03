@@ -195,7 +195,7 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 {
 	char buffer[4096];
 	int n;
-	char cachePath[PATH_MAX];
+	char cachePath[PATH_MAX], tmpCachePath[PATH_MAX];
 	
 	if(snprintf(cachePath, sizeof(cachePath), "%s/%.2s/", options->cachePath, oid) >= (long)sizeof(cachePath))
 	{
@@ -205,7 +205,7 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 	
 	if(access(cachePath, F_OK) != 0)
 	{
-		mkdir(options->cachePath, 0700);
+		mkdir(cachePath, 0700);
 	}
 	
 	if(strlcat(cachePath, oid + 2, sizeof(cachePath)) >= sizeof(cachePath))
@@ -214,7 +214,15 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 		return;
 	}
 	
-	FILE *fp = fopen(cachePath, "wb");
+	if(strlcpy(tmpCachePath, cachePath, sizeof(tmpCachePath)) >= sizeof(tmpCachePath) ||
+	   strlcat(tmpCachePath, "-tmp", sizeof(tmpCachePath)) >= sizeof(tmpCachePath))
+	{
+		io->write_http_status(io->context, 400, "Cache path is too long");
+		return;
+	}
+	
+	
+	FILE *fp = fopen(tmpCachePath, "wb");
 	if(!fp) {
 		io->write_http_status(io->context, 400, "Cache write fail.");
 		return;
@@ -225,6 +233,10 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 	}
 	
 	fclose(fp);
+	
+	// TODO: verify written data
+	
+	rename(tmpCachePath, cachePath);
 	
 	io->write_http_status(io->context, 200, "Ok");
 	io->write(io->context, "\r\n\r\n", 4);
