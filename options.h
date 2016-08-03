@@ -24,6 +24,7 @@ struct options
 	char object_path[PATH_MAX];
 	char scheme[32]; // i.e. https
 	char host[PATH_MAX]; // i.e. localhost:8080
+	char cachePath[PATH_MAX];
 };
 
 #endif /* options_h */

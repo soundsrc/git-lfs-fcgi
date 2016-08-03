@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include "json.h"
 #include "compat/string.h"
 #include "options.h"
@@ -193,10 +195,36 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 {
 	char buffer[4096];
 	int n;
+	char cachePath[PATH_MAX];
+	
+	if(snprintf(cachePath, sizeof(cachePath), "%s/%.2s/", options->cachePath, oid) >= (long)sizeof(cachePath))
+	{
+		io->write_http_status(io->context, 400, "Cache path is too long");
+		return;
+	}
+	
+	if(access(cachePath, F_OK) != 0)
+	{
+		mkdir(options->cachePath, 0700);
+	}
+	
+	if(strlcat(cachePath, oid + 2, sizeof(cachePath)) >= sizeof(cachePath))
+	{
+		io->write_http_status(io->context, 400, "Cache path is too long");
+		return;
+	}
+	
+	FILE *fp = fopen(cachePath, "wb");
+	if(!fp) {
+		io->write_http_status(io->context, 400, "Cache write fail.");
+		return;
+	}
 	
 	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0) {
-		printf("%d\n", n);
+		fwrite(buffer, 1, n, fp);
 	}
+	
+	fclose(fp);
 	
 	io->write_http_status(io->context, 200, "Ok");
 	io->write(io->context, "\r\n\r\n", 4);

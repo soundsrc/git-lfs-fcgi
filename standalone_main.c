@@ -97,6 +97,8 @@ int main(int argc, char *argv[])
 	strlcpy(options.object_path, ".", sizeof(options.object_path));
 	strlcpy(options.scheme, "http", sizeof(options.scheme));
 	strlcpy(options.host, "localhost:8080", sizeof(options.scheme));
+	strlcpy(options.cachePath, ".", sizeof(options.cachePath));
+	
 	
 	memset(&callbacks,0,sizeof(callbacks));
 	callbacks.begin_request = handleRequest;
