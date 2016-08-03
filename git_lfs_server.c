@@ -156,9 +156,10 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 		switch(op) {
 			case git_lfs_operation_upload:
 			{
-				char upload_url[1024];
+				char url[1024];
 
-				if(snprintf(upload_url, sizeof(upload_url), "%s://%s/upload/%s", options->scheme, options->host, json_object_get_string(oid)) >= (long)sizeof(upload_url)) {
+				// add upload url
+				if(snprintf(url, sizeof(url), "%s://%s/upload/%s", options->scheme, options->host, json_object_get_string(oid)) >= (long)sizeof(url)) {
 					git_lfs_write_error(io, 400, "Upload URL is too long.");
 					json_object_put(actions);
 					json_object_put(out);
@@ -166,8 +167,21 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 				}
 
 				struct json_object *upload = json_object_new_object();
-				json_object_object_add(upload, "href", json_object_new_string(upload_url));
+				json_object_object_add(upload, "href", json_object_new_string(url));
 				json_object_object_add(actions, "upload", upload);
+				
+				// add verify url
+				if(snprintf(url, sizeof(url), "%s://%s/verify", options->scheme, options->host) >= (long)sizeof(url)) {
+					git_lfs_write_error(io, 400, "Upload URL is too long.");
+					json_object_put(actions);
+					json_object_put(out);
+					goto error1;
+				}
+				
+				struct json_object *verify = json_object_new_object();
+				json_object_object_add(verify, "href", json_object_new_string(url));
+				json_object_object_add(actions, "verify", verify);
+
 				break;
 			}
 			
@@ -282,32 +296,32 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 	char buffer[4096];
 	int n;
 	char object_path[PATH_MAX], tmp_object_path[PATH_MAX];
-	
+
 	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/", options->object_path, oid) >= (long)sizeof(object_path))
 	{
 		git_lfs_write_error(io, 400, "Object path is too long.");
 		return;
 	}
-	
+
 	if(access(object_path, F_OK) != 0)
 	{
 		mkdir(object_path, 0700);
 	}
-	
+
 	if(strlcat(object_path, oid, sizeof(object_path)) >= sizeof(object_path))
 	{
 		git_lfs_write_error(io, 400, "Object path is too long.");
 		return;
 	}
-	
+
 	if(strlcpy(tmp_object_path, object_path, sizeof(tmp_object_path)) >= sizeof(tmp_object_path) ||
 	   strlcat(tmp_object_path, "-tmp", sizeof(tmp_object_path)) >= sizeof(tmp_object_path))
 	{
 		git_lfs_write_error(io, 400, "Object path is too long.");
 		return;
 	}
-	
-	
+
+
 	FILE *fp = fopen(tmp_object_path, "wb");
 	if(!fp) {
 		git_lfs_write_error(io, 400, "Failed to write to storage.");
@@ -317,15 +331,82 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0) {
 		fwrite(buffer, 1, n, fp);
 	}
-	
+
 	fclose(fp);
-	
+
 	// TODO: verify written data
-	
+
 	rename(tmp_object_path, object_path);
-	
+
 	io->write_http_status(io->context, 200, "OK");
 	io->write_headers(io->context, NULL, 0);
+}
+
+static void git_lfs_verify(const struct options *options, const struct socket_io *io)
+{
+	char buffer[4096];
+	int n;
+	json_tokener * tokener = json_tokener_new();
+	struct json_object *root = NULL;
+	
+	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0)
+	{
+		root = json_tokener_parse_ex(tokener, buffer, n);
+		enum json_tokener_error err = json_tokener_get_error(tokener);
+		if(err == json_tokener_success) break;
+		if(err != json_tokener_continue) {
+			git_lfs_write_error(io, 400, "JSON parsing error.");
+			goto error0;
+		}
+	}
+	
+	struct json_object *oid, *size;
+	if(!json_object_object_get_ex(root, "oid", &oid) ||
+	   !json_object_is_type(oid, json_type_string) ||
+	   !json_object_object_get_ex(root, "size", &size) ||
+	   !json_object_is_type(size, json_type_int))
+	{
+		git_lfs_write_error(io, 400, "API error. Missing oid and size.");
+		goto error0;
+	}
+	
+	const char *oid_string = json_object_get_string(oid);
+	if(!is_valid_oid(oid_string))
+	{
+		git_lfs_write_error(io, 400, "Invalid oid passed to verify.");
+		goto error0;
+	}
+
+	char object_path[PATH_MAX];
+	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/%s", options->object_path, oid_string, oid_string) >= (long)sizeof(object_path))
+	{
+		git_lfs_write_error(io, 400, "Object path is too long.");
+		goto error0;
+	}
+	
+	struct stat st;
+	if(stat(object_path, &st) != 0)
+	{
+		git_lfs_write_error(io, 404, "Object not found.");
+		goto error0;
+	}
+	
+	if(st.st_size != json_object_get_int(size))
+	{
+		git_lfs_write_error(io, 422, "Object size does not match the request.");
+		goto error0;
+	}
+	
+	const char *headers[] = {
+		"Content-Type: application/vnd.git-lfs+json",
+	};
+	
+	io->write_http_status(io->context, 200, "OK");
+	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
+
+error0:
+	if(root) json_object_put(root);
+	json_tokener_free(tokener);
 }
 
 void git_lfs_server_handle_request(const struct options *options, const struct socket_io *io, const char *method, const char *uri)
@@ -352,6 +433,8 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 		if(strcmp(uri, "/objects/batch") == 0)
 		{
 			git_lfs_server_handle_batch(options, io);
+		} else if(strcmp(uri, "/verify") == 0) {
+			git_lfs_verify(options, io);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
