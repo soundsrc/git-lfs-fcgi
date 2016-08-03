@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <sys/stat.h>
 #include <getopt.h>
 #include "compat/string.h"
 #include "options.h"
@@ -95,17 +96,94 @@ static int handleRequest(struct mg_connection *conn)
 
 int main(int argc, char *argv[])
 {
-	struct mg_callbacks callbacks;
-	const char *mg_options[] = {
-		"document_root", ".",
-		"listening_ports", "8080",
-		NULL
+	static struct option long_options[] =
+	{
+		{ "help", no_argument, 0, 0 },
+		{ "verbose", required_argument, 0, 0 },
+		{ "hostname", required_argument, 0, 0 },
+		{ "port", required_argument, 0, 0 },
+		{ "object-dir", required_argument, 0, 0 },
+		{ 0, 0, 0, 0 }
 	};
-
+	
 	memset(&options, 0, sizeof(options));
 	strlcpy(options.object_path, ".", sizeof(options.object_path));
 	strlcpy(options.scheme, "http", sizeof(options.scheme));
 	strlcpy(options.host, "localhost:8080", sizeof(options.scheme));
+	options.port = 8080;
+
+	int opt_index;
+	int c;
+	while((c = getopt_long (argc, argv, "vp:", long_options, &opt_index)) > 0)
+	{
+		switch(c) {
+			case 'v':
+				options.verbose++;
+				break;
+			case 'p':
+			{
+				int port = strtol(optarg, NULL, 10);
+				if(port < 1024 || port > 65535)
+				{
+					fprintf(stderr, "Invalid port number.\n");
+					return -1;
+				}
+				break;
+			}
+			default:
+				switch(opt_index) {
+					case 0: /* help */
+						printf("usage: gif-lfs-server [options...]\n");
+						printf("options:\n");
+						printf("     --help              Display this help.\n");
+						printf(" -v, --verbose           Be verbose, can be specified more than once.\n");
+						printf("     --hostname=HOST     Hostname of this server (i.e. localhost:8080)\n");
+						printf(" -p, --port=PORT         Port to listen (default: 8080)\n");
+						printf("     --object-dir=PATH   Path to a directory where to store the objects (default: current directory)\n");
+						break;
+					case 2: /* hostname */
+						if(strlcpy(options.host, optarg, sizeof(options.host)) >= sizeof(options.host))
+						{
+							fprintf(stderr, "Invalid hostname. Too long.\n");
+							return -1;
+						}
+						break;
+					case 4: /* object-dir */
+					{
+						if(strlcpy(options.object_path, optarg, sizeof(options.object_path)) >= sizeof(options.object_path))
+						{
+							fprintf(stderr, "Invalid object path. Too long.\n");
+							return -1;
+						}
+						
+						struct stat st;
+						if(stat(options.object_path, &st) != 0)
+						{
+							fprintf(stderr, "Invalid object path.\n");
+							return -1;
+						}
+
+						if(!(st.st_mode & S_IFDIR))
+						{
+							fprintf(stderr, "%s: Path is not a valid directory.\n", options.object_path);
+							return -1;
+						}
+					}
+						break;
+						
+				}
+		}
+	}
+
+	
+	struct mg_callbacks callbacks;
+	char port_string[16];
+	snprintf(port_string, sizeof(port_string), "%d", options.port);
+	const char *mg_options[] = {
+		"document_root", ".",
+		"listening_ports", port_string,
+		NULL
+	};
 	
 	
 	memset(&callbacks,0,sizeof(callbacks));
