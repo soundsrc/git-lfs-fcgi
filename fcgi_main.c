@@ -158,6 +158,7 @@ int main(int argc, char *argv[])
 							fprintf(stderr, "%s: Path is not a valid directory.\n", options.object_path);
 							return -1;
 						}
+						break;
 					}
 					case 5: /* socket */
 					{
