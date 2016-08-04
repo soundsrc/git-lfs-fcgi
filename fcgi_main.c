@@ -76,16 +76,18 @@ static void io_fcgi_flush(void *context)
 int main(int argc, char *argv[])
 {
     char socket_path[PATH_MAX] = ":8080";
+	char uri_root[512] = "";
     int max_connections = 400;
 
 	static struct option long_options[] =
 	{
 		{ "help", no_argument, 0, 0 },
-		{ "verbose", required_argument, 0, 0 },
+		{ "verbose", required_argument, 0, 'v' },
 		{ "hostname", required_argument, 0, 0 },
-		{ "port", required_argument, 0, 0 },
+		{ "port", required_argument, 0, 'p' },
 		{ "object-dir", required_argument, 0, 0 },
 		{ "socket", required_argument, 0, 0 },
+		{ "uri-root", required_argument, 0, 0 },
 		{ 0, 0, 0, 0 }
 	};
 	
@@ -97,7 +99,7 @@ int main(int argc, char *argv[])
 	
 	int opt_index;
 	int c;
-	while((c = getopt_long (argc, argv, "vp:", long_options, &opt_index)) > 0)
+	while((c = getopt_long (argc, argv, "vp:", long_options, &opt_index)) >= 0)
 	{
 		switch(c) {
 			case 'v':
@@ -116,6 +118,7 @@ int main(int argc, char *argv[])
 			}
 			default:
 				switch(opt_index) {
+					default:
 					case 0: /* help */
 						printf("usage: gif-lfs-server [options...]\n");
 						printf("options:\n");
@@ -125,6 +128,8 @@ int main(int argc, char *argv[])
 						printf(" -p, --port=PORT         Port to listen (default: 8080)\n");
 						printf("     --object-dir=PATH   Path to a directory where to store the objects (default: current directory)\n");
 						printf("     --socket=PATH       Path to socket (overrides port).\n");
+						printf("     --uri-root=PATH     Root path  (i.e. /git-lfs/)");
+						return -1;
 						break;
 					case 2: /* hostname */
 						if(strlcpy(options.host, optarg, sizeof(options.host)) >= sizeof(options.host))
@@ -163,6 +168,22 @@ int main(int argc, char *argv[])
 						}
 					}
 						break;
+					case 6: /* uri-root */
+					{
+						if(strlcpy(uri_root, optarg, sizeof(uri_root)) >= sizeof(uri_root))
+						{
+							fprintf(stderr, "Invalid root uri path. Too long.\n");
+							return -1;
+						}
+						
+						// remove trailing slash
+						int n = strlen(uri_root);
+						while(n > 0 && uri_root[n - 1] == '/')
+						{
+							uri_root[--n] = 0;
+						}
+					}
+						break;
 						
 				}
 		}
@@ -197,8 +218,10 @@ int main(int argc, char *argv[])
 		const char *document_uri = FCGX_GetParam("DOCUMENT_URI", request.envp);
 		//const char *queryString = FCGX_GetParam("QUERY_STRING", request.envp);
 
-		const char *end_point = strrchr(document_uri, '/');
-		if(end_point) {
+		int uri_root_len = strlen(uri_root);
+		if(strncmp(uri_root, document_uri, uri_root_len) == 0)
+		{
+			const char *end_point = document_uri + uri_root_len;
 			git_lfs_server_handle_request(&options, &io, request_method, end_point);
 		}
 
