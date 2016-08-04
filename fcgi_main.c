@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
 	static struct option long_options[] =
 	{
 		{ "help", no_argument, 0, 0 },
-		{ "verbose", required_argument, 0, 'v' },
+		{ "verbose", no_argument, 0, 'v' },
 		{ "hostname", required_argument, 0, 0 },
 		{ "port", required_argument, 0, 'p' },
 		{ "object-dir", required_argument, 0, 0 },
