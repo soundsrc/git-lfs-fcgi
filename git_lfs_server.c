@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+#include <time.h>
 #include <unistd.h>
 #include <errno.h>
 #include <sys/stat.h>
@@ -97,6 +98,11 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 			git_lfs_write_error(io, 400, "JSON parsing error.");
 			goto error0;
 		}
+	}
+	
+	if(options->verbose >= 2)
+	{
+		printf("> %s\n", json_object_get_string(root));
 	}
 	
 	struct json_object *operation;
@@ -412,6 +418,18 @@ error0:
 
 void git_lfs_server_handle_request(const struct options *options, const struct socket_io *io, const char *method, const char *uri)
 {
+	if(options->verbose >= 1)
+	{
+		time_t now;
+		char currentTime[64];
+		
+		time(&now);
+		
+		strftime(currentTime, sizeof(currentTime), "%d/%b/%Y:%H:%M:%S %z", localtime(&now));
+
+		printf("%s %s %s\n", currentTime, method, uri);
+	}
+	
 	if(strcmp(method, "GET") == 0)
 	{
 		if(strncmp(uri, "/download/", 10) == 0) {
