@@ -18,6 +18,8 @@
 
 struct socket_io;
 struct options;
+
+void git_lfs_init();
 void git_lfs_server_handle_request(const struct options *options, const struct socket_io *io, const char *method, const char *uri);
 
 #endif

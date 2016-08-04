@@ -186,6 +186,8 @@ int main(int argc, char *argv[])
 	};
 	
 	
+	git_lfs_init();
+
 	memset(&callbacks,0,sizeof(callbacks));
 	callbacks.begin_request = handleRequest;
 	context = mg_start(&callbacks, NULL, mg_options);

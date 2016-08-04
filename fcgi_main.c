@@ -202,6 +202,8 @@ int main(int argc, char *argv[])
 
 	FCGX_InitRequest(&request, listening_socket, 0);
 
+	git_lfs_init();
+
     while (FCGX_Accept_r(&request) == 0) {
 
 		struct socket_io io;

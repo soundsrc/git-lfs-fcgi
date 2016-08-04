@@ -20,9 +20,11 @@
 #include <time.h>
 #include <unistd.h>
 #include <errno.h>
+#include <pthread.h>
 #include <sys/stat.h>
 #include "json.h"
 #include "compat/string.h"
+#include "compat/tree.h"
 #include "options.h"
 #include "socket_io.h"
 #include "git_lfs_server.h"
@@ -33,6 +35,18 @@ typedef enum git_lfs_operation_type
 	git_lfs_operation_upload,
 	git_lfs_operation_download
 } git_lfs_operation;
+
+#define ACCESS_TOKEN_SIZE 16
+
+struct git_lfs_access_token
+{
+	char token[ACCESS_TOKEN_SIZE];
+	time_t expire;
+};
+
+#define MAX_ACCESS_TOKENS 16
+static pthread_mutex_t s_access_token_mutex;
+static struct git_lfs_access_token s_access_tokens[MAX_ACCESS_TOKENS];
 
 // oid's are hashes, only sha256 is defined
 static int is_valid_oid(const char *oid)
@@ -48,6 +62,61 @@ static int is_valid_oid(const char *oid)
 	}
 	
 	return 1;
+}
+
+static const struct git_lfs_access_token *glf_lfs_create_access_token(long expire_secs)
+{
+	static const char character_list[] = "ABCDEFGHIJLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+	int i;
+	int free_index = -1;
+	
+	// find a free access token
+	pthread_mutex_lock(&s_access_token_mutex);
+	time_t now = time(NULL);
+	for(i = 0; i < MAX_ACCESS_TOKENS; i++) {
+		
+		// return existing token as long as the expiry is good
+		if(now + expire_secs <= s_access_tokens[i].expire)
+		{
+			pthread_mutex_unlock(&s_access_token_mutex);
+			return &s_access_tokens[i];
+		}
+
+		if(now > s_access_tokens[i].expire) {
+			free_index = i;
+		}
+	}
+	
+	if(free_index >= 0)
+	{
+		for(int i = 0; i < 15; i++) {
+			s_access_tokens[free_index].token[i] = character_list[arc4random() % sizeof(character_list)];
+		}
+		s_access_tokens[free_index].token[15] = 0;
+		s_access_tokens[free_index].expire = time(NULL) + expire_secs * 2;
+	}
+	
+	pthread_mutex_unlock(&s_access_token_mutex);
+	
+	if(free_index < 0) return NULL;
+	
+	return &s_access_tokens[free_index];
+}
+
+static int glf_lfs_is_access_token_valid(const char *token)
+{
+	time_t now = time(NULL);
+	pthread_mutex_lock(&s_access_token_mutex);
+	for(int i = 0; i < MAX_ACCESS_TOKENS; i++) {
+		if(strncmp(token, s_access_tokens[i].token, ACCESS_TOKEN_SIZE) == 0 &&
+		   s_access_tokens[i].expire >= now) {
+			pthread_mutex_unlock(&s_access_token_mutex);
+			return 1;
+		}
+	}
+	pthread_mutex_unlock(&s_access_token_mutex);
+
+	return 0;
 }
 
 static void git_lfs_write_error(const struct socket_io *io, int error_code, const char *message)
@@ -160,13 +229,18 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 		json_object_object_add(out, "size", json_object_get(size));
 		struct json_object *actions = json_object_new_object();
 		
+		const struct git_lfs_access_token *access_token = glf_lfs_create_access_token(600); // hardcode to 10 minutes
+
+		char expire_time[32];
+		strftime(expire_time, sizeof(expire_time), "%FT%TZ", gmtime(&access_token->expire));
+		
 		switch(op) {
 			case git_lfs_operation_upload:
 			{
 				char url[1024];
 
 				// add upload url
-				if(snprintf(url, sizeof(url), "%s://%s/upload/%s", options->scheme, options->host, json_object_get_string(oid)) >= (long)sizeof(url)) {
+				if(snprintf(url, sizeof(url), "%s://%s/upload/%s/%s", options->scheme, options->host, access_token->token, json_object_get_string(oid)) >= (long)sizeof(url)) {
 					git_lfs_write_error(io, 400, "Upload URL is too long.");
 					json_object_put(actions);
 					json_object_put(out);
@@ -175,10 +249,11 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 
 				struct json_object *upload = json_object_new_object();
 				json_object_object_add(upload, "href", json_object_new_string(url));
+				json_object_object_add(upload, "expires_at", json_object_new_string(expire_time));
 				json_object_object_add(actions, "upload", upload);
 				
 				// add verify url
-				if(snprintf(url, sizeof(url), "%s://%s/verify", options->scheme, options->host) >= (long)sizeof(url)) {
+				if(snprintf(url, sizeof(url), "%s://%s/verify/%s", options->scheme, options->host, access_token->token) >= (long)sizeof(url)) {
 					git_lfs_write_error(io, 400, "Upload URL is too long.");
 					json_object_put(actions);
 					json_object_put(out);
@@ -187,6 +262,7 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 				
 				struct json_object *verify = json_object_new_object();
 				json_object_object_add(verify, "href", json_object_new_string(url));
+				json_object_object_add(verify, "expires_at", json_object_new_string(expire_time));
 				json_object_object_add(actions, "verify", verify);
 
 				break;
@@ -196,7 +272,7 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 			{
 				char download_url[1024];
 				
-				if(snprintf(download_url, sizeof(download_url), "%s://%s/download/%s", options->scheme, options->host, json_object_get_string(oid)) >= (long)sizeof(download_url)) {
+				if(snprintf(download_url, sizeof(download_url), "%s://%s/download/%s/%s", options->scheme, options->host, access_token->token, json_object_get_string(oid)) >= (long)sizeof(download_url)) {
 					git_lfs_write_error(io, 400, "Download URL is too long.");
 					json_object_put(actions);
 					json_object_put(out);
@@ -205,6 +281,7 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 				
 				struct json_object *download = json_object_new_object();
 				json_object_object_add(download, "href", json_object_new_string(download_url));
+				json_object_object_add(download, "expires_at", json_object_new_string(expire_time));
 				json_object_object_add(actions, "download", download);
 				break;
 			}
@@ -240,11 +317,16 @@ error0:
 	json_tokener_free(tokener);
 }
 
-static void git_lfs_download(const struct options *options, const struct socket_io *io, const char *oid)
+static void git_lfs_download(const struct options *options, const struct socket_io *io, const char *access_token, const char *oid)
 {
 	char buffer[4096];
 	int n;
 	char object_path[PATH_MAX];
+	
+	if(!glf_lfs_is_access_token_valid(access_token)) {
+		git_lfs_write_error(io, 400, "Access token is not valid.");
+		return;
+	}
 	
 	if(!is_valid_oid(oid)) {
 		git_lfs_write_error(io, 400, "Object ID is not valid.");
@@ -298,11 +380,16 @@ static void git_lfs_download(const struct options *options, const struct socket_
 	fclose(fp);
 }
 
-static void git_lfs_upload(const struct options *options, const struct socket_io *io, const char *oid)
+static void git_lfs_upload(const struct options *options, const struct socket_io *io, const char *access_token, const char *oid)
 {
 	char buffer[4096];
 	int n;
 	char object_path[PATH_MAX], tmp_object_path[PATH_MAX];
+
+	if(!glf_lfs_is_access_token_valid(access_token)) {
+		git_lfs_write_error(io, 400, "Access token is not valid.");
+		return;
+	}
 
 	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/", options->object_path, oid) >= (long)sizeof(object_path))
 	{
@@ -349,13 +436,18 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 	io->write_headers(io->context, NULL, 0);
 }
 
-static void git_lfs_verify(const struct options *options, const struct socket_io *io)
+static void git_lfs_verify(const struct options *options, const struct socket_io *io, const char *access_token)
 {
 	char buffer[4096];
 	int n;
 	json_tokener * tokener = json_tokener_new();
 	struct json_object *root = NULL;
 	
+	if(!glf_lfs_is_access_token_valid(access_token)) {
+		git_lfs_write_error(io, 400, "Access token is not valid.");
+		return;
+	}
+
 	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0)
 	{
 		root = json_tokener_parse_ex(tokener, buffer, n);
@@ -416,8 +508,16 @@ error0:
 	json_tokener_free(tokener);
 }
 
+void git_lfs_init()
+{
+	memset(s_access_tokens, 0, sizeof(s_access_tokens));
+	pthread_mutex_init(&s_access_token_mutex, NULL);
+}
+
 void git_lfs_server_handle_request(const struct options *options, const struct socket_io *io, const char *method, const char *uri)
 {
+	char access_token[ACCESS_TOKEN_SIZE];
+
 	if(options->verbose >= 1)
 	{
 		time_t now;
@@ -433,7 +533,12 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 	if(strcmp(method, "GET") == 0)
 	{
 		if(strncmp(uri, "/download/", 10) == 0) {
-			git_lfs_download(options, io, uri + 10);
+			if(strlcpy(access_token, uri + 10, ACCESS_TOKEN_SIZE) < ACCESS_TOKEN_SIZE )
+			{
+				git_lfs_write_error(io, 400, "Invalid access token.");
+			}
+			
+			git_lfs_download(options, io, access_token, uri + 10 + ACCESS_TOKEN_SIZE);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
@@ -441,7 +546,12 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 	} else if(strcmp(method, "PUT") == 0) {
 		
 		if(strncmp(uri, "/upload/", 8) == 0) {
-			git_lfs_upload(options, io, uri + 8);
+			if(strlcpy(access_token, uri + 8, ACCESS_TOKEN_SIZE - 1) < ACCESS_TOKEN_SIZE - 1)
+			{
+				git_lfs_write_error(io, 400, "Invalid access token.");
+			}
+			
+			git_lfs_upload(options, io, access_token, uri + 8 + ACCESS_TOKEN_SIZE);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
@@ -453,7 +563,12 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 		{
 			git_lfs_server_handle_batch(options, io);
 		} else if(strcmp(uri, "/verify") == 0) {
-			git_lfs_verify(options, io);
+			if(strlcpy(access_token, uri + 7, ACCESS_TOKEN_SIZE) < ACCESS_TOKEN_SIZE)
+			{
+				git_lfs_write_error(io, 400, "Invalid access token.");
+			}
+
+			git_lfs_verify(options, io, access_token);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
