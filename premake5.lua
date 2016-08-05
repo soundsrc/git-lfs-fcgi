@@ -59,15 +59,16 @@ solution "git-lfs-server"
 	project "git-lfs-server-standalone"
 		kind "ConsoleApp"
 		language "C"
-		includedirs { 
+		includedirs {
+			".",
 			"external/json-c",
 			"external/mongoose",
 			"/usr/local/include",
 		}
 		libdirs { "/usr/local/lib" }
 		files { 
-			"*.c",
-			"*.h",
+			"src/*.c",
+			"src/*.h",
 			"compat/*.h"
 		}
 		if not os.is("bsd") and not os.is("macosx") then
@@ -77,13 +78,14 @@ solution "git-lfs-server"
 			}
 		end
 		excludes {
-			"fcgi_main.c"
+			"src/fcgi_main.c"
 		}
 		links { "mongoose", "json-c" }
 	project "git-lfs-server-fcgi"
 		kind "ConsoleApp"
 		language "C"
 		includedirs { 
+			".",
 			"external/json-c",
 			"external/mongoose",
 			"external/libfcgi/include",
@@ -91,8 +93,8 @@ solution "git-lfs-server"
 		}
 		libdirs { "/usr/local/lib" }
 		files { 
-			"*.c",
-			"*.h",
+			"src/*.c",
+			"src/*.h",
 			"compat/*.h"
 		}
 		if not os.is("bsd") and not os.is("macosx") then
@@ -102,6 +104,6 @@ solution "git-lfs-server"
 			}
 		end
 		excludes {
-			"standalone_main.c"
+			"src/standalone_main.c"
 		}
 		links { "mongoose", "json-c", "libfcgi" }
