@@ -61,6 +61,7 @@ solution "git-lfs-server"
 	project "git-lfs-server-standalone"
 		kind "ConsoleApp"
 		language "C"
+		buildoptions { "-std=c99" }
 		includedirs {
 			".",
 			"external/json-c",
@@ -82,10 +83,11 @@ solution "git-lfs-server"
 		excludes {
 			"src/fcgi_main.c"
 		}
-		links { "mongoose", "json-c" }
+		links { "mongoose", "json-c", "pthread" }
 	project "git-lfs-server-fcgi"
 		kind "ConsoleApp"
 		language "C"
+		buildoptions { "-std=c99" }
 		includedirs { 
 			".",
 			"external/json-c",
@@ -108,4 +110,4 @@ solution "git-lfs-server"
 		excludes {
 			"src/standalone_main.c"
 		}
-		links { "mongoose", "json-c", "libfcgi" }
+		links { "mongoose", "json-c", "libfcgi", "pthread" }

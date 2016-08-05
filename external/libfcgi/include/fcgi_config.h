@@ -39,6 +39,8 @@
 #undef ssize_t
 
 #ifndef _MSC_VER
+#define STDC_HEADERS 1
+#define HAVE_FILENO_PROTO 1
 #define HAVE_NETINET_IN_H 1
 #define HAVE_NETDB_H 1
 #define HAVE_SYS_SOCKET_H 1

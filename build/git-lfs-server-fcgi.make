@@ -19,10 +19,10 @@ ifeq ($(config),debug)
   INCLUDES += -I.. -I../external/json-c -I../external/mongoose -I../external/libfcgi/include -I/usr/local/include
   FORCE_INCLUDE +=
   ALL_CPPFLAGS += $(CPPFLAGS) -MMD -MP $(DEFINES) $(INCLUDES)
-  ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -g -Wall -Wextra
+  ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -g -Wall -Wextra -std=c99
   ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CFLAGS)
   ALL_RESFLAGS += $(RESFLAGS) $(DEFINES) $(INCLUDES)
-  LIBS += bin/Debug/libmongoose.a bin/Debug/libjson-c.a bin/Debug/liblibfcgi.a
+  LIBS += bin/Debug/libmongoose.a bin/Debug/libjson-c.a bin/Debug/liblibfcgi.a -lpthread
   LDDEPS += bin/Debug/libmongoose.a bin/Debug/libjson-c.a bin/Debug/liblibfcgi.a
   ALL_LDFLAGS += $(LDFLAGS) -L/usr/local/lib
   LINKCMD = $(CC) -o "$@" $(OBJECTS) $(RESOURCES) $(ALL_LDFLAGS) $(LIBS)
@@ -46,10 +46,10 @@ ifeq ($(config),release)
   INCLUDES += -I.. -I../external/json-c -I../external/mongoose -I../external/libfcgi/include -I/usr/local/include
   FORCE_INCLUDE +=
   ALL_CPPFLAGS += $(CPPFLAGS) -MMD -MP $(DEFINES) $(INCLUDES)
-  ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -O3 -Wall -Wextra
+  ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -O3 -Wall -Wextra -std=c99
   ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CFLAGS)
   ALL_RESFLAGS += $(RESFLAGS) $(DEFINES) $(INCLUDES)
-  LIBS += bin/Release/libmongoose.a bin/Release/libjson-c.a bin/Release/liblibfcgi.a
+  LIBS += bin/Release/libmongoose.a bin/Release/libjson-c.a bin/Release/liblibfcgi.a -lpthread
   LDDEPS += bin/Release/libmongoose.a bin/Release/libjson-c.a bin/Release/liblibfcgi.a
   ALL_LDFLAGS += $(LDFLAGS) -L/usr/local/lib -Wl,-x
   LINKCMD = $(CC) -o "$@" $(OBJECTS) $(RESOURCES) $(ALL_LDFLAGS) $(LIBS)
