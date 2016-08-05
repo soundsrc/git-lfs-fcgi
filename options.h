@@ -27,8 +27,7 @@ struct options
 {
 	int verbose;
 	char object_path[PATH_MAX];
-	char scheme[32]; // i.e. https
-	char host[PATH_MAX]; // i.e. localhost:8080
+	char base_url[PATH_MAX]; // i.e. http://localhost:8080
 	int port;
 };
 

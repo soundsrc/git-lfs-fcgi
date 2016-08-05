@@ -239,7 +239,7 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 				char url[1024];
 
 				// add upload url
-				if(snprintf(url, sizeof(url), "%s://%s/upload/%s/%s", options->scheme, options->host, access_token->token, json_object_get_string(oid)) >= (long)sizeof(url)) {
+				if(snprintf(url, sizeof(url), "%s/upload/%s/%s", options->base_url, access_token->token, json_object_get_string(oid)) >= (long)sizeof(url)) {
 					git_lfs_write_error(io, 400, "Upload URL is too long.");
 					json_object_put(actions);
 					json_object_put(out);
@@ -252,7 +252,7 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 				json_object_object_add(actions, "upload", upload);
 				
 				// add verify url
-				if(snprintf(url, sizeof(url), "%s://%s/verify/%s", options->scheme, options->host, access_token->token) >= (long)sizeof(url)) {
+				if(snprintf(url, sizeof(url), "%s/verify/%s", options->base_url, access_token->token) >= (long)sizeof(url)) {
 					git_lfs_write_error(io, 400, "Upload URL is too long.");
 					json_object_put(actions);
 					json_object_put(out);
@@ -271,7 +271,7 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 			{
 				char download_url[1024];
 				
-				if(snprintf(download_url, sizeof(download_url), "%s://%s/download/%s/%s", options->scheme, options->host, access_token->token, json_object_get_string(oid)) >= (long)sizeof(download_url)) {
+				if(snprintf(download_url, sizeof(download_url), "%s/download/%s/%s", options->base_url, access_token->token, json_object_get_string(oid)) >= (long)sizeof(download_url)) {
 					git_lfs_write_error(io, 400, "Download URL is too long.");
 					json_object_put(actions);
 					json_object_put(out);
