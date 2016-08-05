@@ -99,22 +99,21 @@ int main(int argc, char *argv[])
 	static struct option long_options[] =
 	{
 		{ "help", no_argument, 0, 0 },
-		{ "verbose", required_argument, 0, 0 },
-		{ "hostname", required_argument, 0, 0 },
-		{ "port", required_argument, 0, 0 },
+		{ "verbose", required_argument, 0, 'v' },
+		{ "base-url", required_argument, 0, 0 },
+		{ "port", required_argument, 0, 'p' },
 		{ "object-dir", required_argument, 0, 0 },
 		{ 0, 0, 0, 0 }
 	};
 	
 	memset(&options, 0, sizeof(options));
 	strlcpy(options.object_path, ".", sizeof(options.object_path));
-	strlcpy(options.scheme, "http", sizeof(options.scheme));
-	strlcpy(options.host, "localhost:8080", sizeof(options.scheme));
+	strlcpy(options.base_url, "http://localhost:8080", sizeof(options.base_url));
 	options.port = 8080;
 
 	int opt_index;
 	int c;
-	while((c = getopt_long (argc, argv, "vp:", long_options, &opt_index)) > 0)
+	while((c = getopt_long (argc, argv, "vp:", long_options, &opt_index)) >= 0)
 	{
 		switch(c) {
 			case 'v':
@@ -137,12 +136,13 @@ int main(int argc, char *argv[])
 						printf("options:\n");
 						printf("     --help              Display this help.\n");
 						printf(" -v, --verbose           Be verbose, can be specified more than once.\n");
-						printf("     --hostname=HOST     Hostname of this server (i.e. localhost:8080)\n");
+						printf("     --base-url=HOST     Base url of this server (i.e. http://localhost:8080)\n");
 						printf(" -p, --port=PORT         Port to listen (default: 8080)\n");
 						printf("     --object-dir=PATH   Path to a directory where to store the objects (default: current directory)\n");
+						return -1;
 						break;
-					case 2: /* hostname */
-						if(strlcpy(options.host, optarg, sizeof(options.host)) >= sizeof(options.host))
+					case 2: /* base-url */
+						if(strlcpy(options.base_url, optarg, sizeof(options.base_url)) >= sizeof(options.base_url))
 						{
 							fprintf(stderr, "Invalid hostname. Too long.\n");
 							return -1;
@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
 							return -1;
 						}
 
-						if(!(st.st_mode & S_IFDIR))
+						if(!S_ISDIR(st.st_mode))
 						{
 							fprintf(stderr, "%s: Path is not a valid directory.\n", options.object_path);
 							return -1;
