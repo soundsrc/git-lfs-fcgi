@@ -76,7 +76,6 @@ static void io_fcgi_flush(void *context)
 int main(int argc, char *argv[])
 {
     char socket_path[PATH_MAX] = ":8080";
-	char uri_root[512] = "";
     int max_connections = 400;
 
 	static struct option long_options[] =
@@ -87,7 +86,6 @@ int main(int argc, char *argv[])
 		{ "port", required_argument, 0, 'p' },
 		{ "object-dir", required_argument, 0, 0 },
 		{ "socket", required_argument, 0, 0 },
-		{ "uri-root", required_argument, 0, 0 },
 		{ 0, 0, 0, 0 }
 	};
 	
@@ -167,23 +165,6 @@ int main(int argc, char *argv[])
 						}
 					}
 						break;
-					case 6: /* uri-root */
-					{
-						if(strlcpy(uri_root, optarg, sizeof(uri_root)) >= sizeof(uri_root))
-						{
-							fprintf(stderr, "Invalid root uri path. Too long.\n");
-							return -1;
-						}
-						
-						// remove trailing slash
-						int n = strlen(uri_root);
-						while(n > 0 && uri_root[n - 1] == '/')
-						{
-							uri_root[--n] = 0;
-						}
-					}
-						break;
-						
 				}
 		}
 	}
@@ -219,10 +200,20 @@ int main(int argc, char *argv[])
 		const char *document_uri = FCGX_GetParam("DOCUMENT_URI", request.envp);
 		//const char *queryString = FCGX_GetParam("QUERY_STRING", request.envp);
 
-		int uri_root_len = strlen(uri_root);
-		if(strncmp(uri_root, document_uri, uri_root_len) == 0)
+		const char *uri_minus_scheme = strstr(options.base_url, "://");
+		if(uri_minus_scheme) {
+			uri_minus_scheme += 3;
+		} else {
+			uri_minus_scheme = options.base_url;
+		}
+
+		const char *base_doc_uri = strchr(uri_minus_scheme, '/');
+		int uri_root_len = strlen(base_doc_uri);
+		if(strncmp(base_doc_uri, document_uri, uri_root_len) == 0)
 		{
 			const char *end_point = document_uri + uri_root_len;
+			if(*end_point != '/') --end_point;
+
 			git_lfs_server_handle_request(&options, &io, request_method, end_point);
 		}
 
