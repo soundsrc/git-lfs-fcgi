@@ -1,4 +1,6 @@
 solution "git-lfs-server"
+	location(_WORKING_DIR)
+
 	configurations { "Debug", "Release" }
 	configuration "Debug"
 		flags { "ExtraWarnings", "Symbols" }
