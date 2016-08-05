@@ -24,7 +24,6 @@
 #include <sys/stat.h>
 #include "json.h"
 #include "compat/string.h"
-#include "compat/tree.h"
 #include "options.h"
 #include "socket_io.h"
 #include "git_lfs_server.h"
