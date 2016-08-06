@@ -520,12 +520,11 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 	if(strcmp(method, "GET") == 0)
 	{
 		if(strncmp(uri, "/download/", 10) == 0) {
-			if(strlcpy(access_token, uri + 10, ACCESS_TOKEN_SIZE) < ACCESS_TOKEN_SIZE )
-			{
+			if(strlcpy(access_token, uri + 10, ACCESS_TOKEN_SIZE) < ACCESS_TOKEN_SIZE ) {
 				git_lfs_write_error(io, 400, "Invalid access token.");
+			} else {
+				git_lfs_download(options, io, access_token, uri + 10 + ACCESS_TOKEN_SIZE);
 			}
-			
-			git_lfs_download(options, io, access_token, uri + 10 + ACCESS_TOKEN_SIZE);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
@@ -533,12 +532,11 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 	} else if(strcmp(method, "PUT") == 0) {
 		
 		if(strncmp(uri, "/upload/", 8) == 0) {
-			if(strlcpy(access_token, uri + 8, ACCESS_TOKEN_SIZE - 1) < ACCESS_TOKEN_SIZE - 1)
-			{
+			if(strlcpy(access_token, uri + 8, ACCESS_TOKEN_SIZE - 1) < ACCESS_TOKEN_SIZE - 1) {
 				git_lfs_write_error(io, 400, "Invalid access token.");
+			} else {
+				git_lfs_upload(options, io, access_token, uri + 8 + ACCESS_TOKEN_SIZE);
 			}
-			
-			git_lfs_upload(options, io, access_token, uri + 8 + ACCESS_TOKEN_SIZE);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
@@ -550,12 +548,11 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 		{
 			git_lfs_server_handle_batch(options, io);
 		} else if(strcmp(uri, "/verify") == 0) {
-			if(strlcpy(access_token, uri + 7, ACCESS_TOKEN_SIZE) < ACCESS_TOKEN_SIZE)
-			{
+			if(strlcpy(access_token, uri + 7, ACCESS_TOKEN_SIZE) < ACCESS_TOKEN_SIZE) {
 				git_lfs_write_error(io, 400, "Invalid access token.");
+			} else {
+				git_lfs_verify(options, io, access_token);
 			}
-
-			git_lfs_verify(options, io, access_token);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
