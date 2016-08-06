@@ -207,6 +207,17 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+	if(options.verbose) {
+		printf("Base URL: %s\n", options.base_url);
+		printf("Objects Path: %s\n", options.object_path);
+		printf("Socket Path: %s\n", socket_path);
+		if(chroot_path[0]) {
+			printf("Chroot: %s\n", chroot_path);
+			printf("User: %s\n", chroot_user);
+			printf("Group: %s\n", chroot_group);
+		}
+	}
+
 	FCGX_Request request;
 
 	FCGX_Init();
