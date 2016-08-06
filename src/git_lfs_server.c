@@ -19,10 +19,10 @@
 #include <inttypes.h>
 #include <time.h>
 #include <errno.h>
-#include <pthread.h>
 #include "json.h"
 #include "compat/string.h"
 #include "os/filesystem.h"
+#include "os/mutex.h"
 #include "options.h"
 #include "socket_io.h"
 #include "git_lfs_server.h"
@@ -43,7 +43,7 @@ struct git_lfs_access_token
 };
 
 #define MAX_ACCESS_TOKENS 16
-static pthread_mutex_t s_access_token_mutex;
+static os_mutex_t s_access_token_mutex;
 static struct git_lfs_access_token s_access_tokens[MAX_ACCESS_TOKENS];
 
 // oid's are hashes, only sha256 is defined
@@ -69,14 +69,14 @@ static const struct git_lfs_access_token *glf_lfs_create_access_token(long expir
 	int free_index = -1;
 	
 	// find a free access token
-	pthread_mutex_lock(&s_access_token_mutex);
+	os_mutex_lock(s_access_token_mutex);
 	time_t now = time(NULL);
 	for(i = 0; i < MAX_ACCESS_TOKENS; i++) {
 		
 		// return existing token as long as the expiry is good
 		if(now + expire_secs <= s_access_tokens[i].expire)
 		{
-			pthread_mutex_unlock(&s_access_token_mutex);
+			os_mutex_unlock(s_access_token_mutex);
 			return &s_access_tokens[i];
 		}
 
@@ -94,7 +94,7 @@ static const struct git_lfs_access_token *glf_lfs_create_access_token(long expir
 		s_access_tokens[free_index].expire = time(NULL) + expire_secs * 2;
 	}
 	
-	pthread_mutex_unlock(&s_access_token_mutex);
+	os_mutex_unlock(s_access_token_mutex);
 	
 	if(free_index < 0) return NULL;
 	
@@ -104,15 +104,15 @@ static const struct git_lfs_access_token *glf_lfs_create_access_token(long expir
 static int glf_lfs_is_access_token_valid(const char *token)
 {
 	time_t now = time(NULL);
-	pthread_mutex_lock(&s_access_token_mutex);
+	os_mutex_lock(s_access_token_mutex);
 	for(int i = 0; i < MAX_ACCESS_TOKENS; i++) {
 		if(strncmp(token, s_access_tokens[i].token, ACCESS_TOKEN_SIZE) == 0 &&
 		   s_access_tokens[i].expire >= now) {
-			pthread_mutex_unlock(&s_access_token_mutex);
+			os_mutex_unlock(s_access_token_mutex);
 			return 1;
 		}
 	}
-	pthread_mutex_unlock(&s_access_token_mutex);
+	os_mutex_unlock(s_access_token_mutex);
 
 	return 0;
 }
@@ -498,7 +498,7 @@ error0:
 void git_lfs_init()
 {
 	memset(s_access_tokens, 0, sizeof(s_access_tokens));
-	pthread_mutex_init(&s_access_token_mutex, NULL);
+	s_access_token_mutex = os_mutex_create();
 }
 
 void git_lfs_server_handle_request(const struct options *options, const struct socket_io *io, const char *method, const char *uri)
