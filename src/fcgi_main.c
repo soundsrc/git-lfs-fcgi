@@ -20,6 +20,7 @@
 #include <signal.h>
 #include <ctype.h>
 #if __OpenBSD__
+#include <unistd.h>
 #include <sys/param.h>
 #endif
 #include <getopt.h>
