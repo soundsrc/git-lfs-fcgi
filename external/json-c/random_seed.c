@@ -224,6 +224,10 @@ static int get_time_seed()
 
 int json_c_get_random_seed()
 {
+#ifdef __OpenBSD__
+	return (int)arc4random();
+#endif
+
 #if HAVE_RDRAND
     if (has_rdrand()) return get_rdrand_seed();
 #endif
