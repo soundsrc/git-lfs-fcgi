@@ -19,6 +19,10 @@
 #include <signal.h>
 #include <ctype.h>
 #include <sys/stat.h>
+#ifdef __OpenBSD__
+#include <unistd.h>
+#include <sys/param.h>
+#endif
 #include <getopt.h>
 #include "compat/string.h"
 #include "options.h"
@@ -198,6 +202,14 @@ int main(int argc, char *argv[])
 	}
 	
 	signal(SIGINT, intHandler);
+
+#ifdef OpenBSD5_9
+	if(pledge("stdio cpath unix inet", NULL) < 0) {
+                fprintf(stderr, "pledge() error.\n");
+                exit(-1);
+        }
+#endif
+
 	while(running) {
 		usleep(10);
 	}

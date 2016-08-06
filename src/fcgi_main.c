@@ -20,6 +20,9 @@
 #include <signal.h>
 #include <ctype.h>
 #include <sys/stat.h>
+#if __OpenBSD__
+#include <sys/param.h>
+#endif
 #include <getopt.h>
 #include "compat/string.h"
 #include "options.h"
@@ -183,6 +186,13 @@ int main(int argc, char *argv[])
 	FCGX_InitRequest(&request, listening_socket, 0);
 
 	git_lfs_init();
+
+#ifdef OpenBSD5_9
+        if(pledge("stdio cpath unix inet", NULL) < 0) {
+                fprintf(stderr, "pledge() error.\n");
+                exit(-1);
+        }
+#endif
 
     while (FCGX_Accept_r(&request) == 0) {
 
