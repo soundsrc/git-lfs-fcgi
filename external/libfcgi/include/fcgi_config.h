@@ -45,4 +45,5 @@
 #define HAVE_NETDB_H 1
 #define HAVE_SYS_SOCKET_H 1
 #define HAVE_UNISTD_H 1
+#define HAVE_SOCKADDR_UN_SUN_LEN 1
 #endif
