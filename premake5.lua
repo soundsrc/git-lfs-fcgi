@@ -72,8 +72,14 @@ solution "git-lfs-server"
 		files { 
 			"src/*.c",
 			"src/*.h",
-			"compat/*.h"
+			"compat/*.h",
+			"os/*.h"
 		}
+
+		files {
+			"os/unix/*.c"
+		}
+
 		if not os.is("bsd") and not os.is("macosx") then
 			files { 
 				"compat/*.cpp", 
@@ -99,8 +105,14 @@ solution "git-lfs-server"
 		files { 
 			"src/*.c",
 			"src/*.h",
-			"compat/*.h"
+			"compat/*.h",
+			"os/*.h"
 		}
+
+		files {
+			"os/unix/*.c"
+		}
+
 		if not os.is("bsd") and not os.is("macosx") then
 			files { 
 				"compat/*.cpp", 

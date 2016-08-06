@@ -19,12 +19,12 @@
 #include <string.h>
 #include <signal.h>
 #include <ctype.h>
-#include <sys/stat.h>
 #if __OpenBSD__
 #include <sys/param.h>
 #endif
 #include <getopt.h>
 #include "compat/string.h"
+#include "os/filesystem.h"
 #include "options.h"
 #include "socket_io.h"
 #include "git_lfs_server.h"
@@ -146,14 +146,7 @@ int main(int argc, char *argv[])
 							return -1;
 						}
 						
-						struct stat st;
-						if(stat(options.object_path, &st) != 0)
-						{
-							fprintf(stderr, "Invalid object path.\n");
-							return -1;
-						}
-						
-						if(!S_ISDIR(st.st_mode))
+						if(!os_is_directory(options.object_path))
 						{
 							fprintf(stderr, "%s: Path is not a valid directory.\n", options.object_path);
 							return -1;

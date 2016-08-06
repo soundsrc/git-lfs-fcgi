@@ -18,12 +18,11 @@
 #include <string.h>
 #include <inttypes.h>
 #include <time.h>
-#include <unistd.h>
 #include <errno.h>
 #include <pthread.h>
-#include <sys/stat.h>
 #include "json.h"
 #include "compat/string.h"
+#include "os/filesystem.h"
 #include "options.h"
 #include "socket_io.h"
 #include "git_lfs_server.h"
@@ -338,32 +337,21 @@ static void git_lfs_download(const struct options *options, const struct socket_
 		return;
 	}
 
-	struct stat st;
-	if(stat(object_path, &st) < 0)
-	{
-		switch(errno) {
-			case ENOENT:
-				git_lfs_write_error(io, 404, "Object was not found.");
-				return;
-			case EACCES:
-				git_lfs_write_error(io, 403, "Permission to access object was denied.");
-				return;
-			default:
-				git_lfs_write_error(io, 400, "Error accessing object.");
-				return;
-		}
-		
-		return;
-	}
-
 	FILE *fp = fopen(object_path, "rb");
 	if(!fp) {
 		git_lfs_write_error(io, 404, "Object was not found.");
 		return;
 	}
+	
+	long filesize = os_file_size(object_path);
+	if(filesize < 0) {
+		git_lfs_write_error(io, 400, "Could not determine file size.");
+		fclose(fp);
+		return;
+	}
 
 	char content_length[64];
-	snprintf(content_length, sizeof(content_length), "Content-Length: %lld", (int64_t)st.st_size);
+	snprintf(content_length, sizeof(content_length), "Content-Length: %ld", filesize);
 	const char *headers[] = {
 		"Content-Type: application/octet-stream",
 		content_length
@@ -396,9 +384,9 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 		return;
 	}
 
-	if(access(object_path, F_OK) != 0)
+	if(os_file_exists(object_path))
 	{
-		mkdir(object_path, 0700);
+		os_mkdir(object_path, 0700);
 	}
 
 	if(strlcat(object_path, oid, sizeof(object_path)) >= sizeof(object_path))
@@ -429,7 +417,7 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 
 	// TODO: verify written data
 
-	rename(tmp_object_path, object_path);
+	os_rename(tmp_object_path, object_path);
 
 	io->write_http_status(io->context, 200, "OK");
 	io->write_headers(io->context, NULL, 0);
@@ -482,14 +470,14 @@ static void git_lfs_verify(const struct options *options, const struct socket_io
 		goto error0;
 	}
 	
-	struct stat st;
-	if(stat(object_path, &st) != 0)
+	long filesize = os_file_size(object_path);
+	if(filesize < 0)
 	{
 		git_lfs_write_error(io, 404, "Object not found.");
 		goto error0;
 	}
 	
-	if(st.st_size != json_object_get_int(size))
+	if(filesize != json_object_get_int(size))
 	{
 		git_lfs_write_error(io, 422, "Object size does not match the request.");
 		goto error0;
