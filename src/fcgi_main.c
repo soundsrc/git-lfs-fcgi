@@ -25,6 +25,7 @@
 #include <getopt.h>
 #include "compat/string.h"
 #include "os/filesystem.h"
+#include "os/droproot.h"
 #include "options.h"
 #include "socket_io.h"
 #include "git_lfs_server.h"
@@ -81,6 +82,9 @@ int main(int argc, char *argv[])
 {
     char socket_path[PATH_MAX] = ":8080";
     int max_connections = 400;
+	char chroot_path[PATH_MAX] = "";
+	char chroot_user[32] = "nobody";
+	char chroot_group[32] = "nobody";
 
 	static struct option long_options[] =
 	{
@@ -90,6 +94,9 @@ int main(int argc, char *argv[])
 		{ "port", required_argument, 0, 'p' },
 		{ "object-dir", required_argument, 0, 0 },
 		{ "socket", required_argument, 0, 0 },
+		{ "chroot", required_argument, 0, 0 },
+		{ "chroot-user", required_argument, 0, 0 },
+		{ "chroot-group", required_argument, 0, 0 },
 		{ 0, 0, 0, 0 }
 	};
 	
@@ -123,12 +130,15 @@ int main(int argc, char *argv[])
 					case 0: /* help */
 						printf("usage: gif-lfs-server [options...]\n");
 						printf("options:\n");
-						printf("     --help              Display this help.\n");
-						printf(" -v, --verbose           Be verbose, can be specified more than once.\n");
-						printf("     --base-url=URL      Base URL to the server (i.e. http://localhost:8080)\n");
-						printf(" -p, --port=PORT         Port to listen (default: 8080)\n");
-						printf("     --object-dir=PATH   Path to a directory where to store the objects (default: current directory)\n");
-						printf("     --socket=PATH       Path to socket (overrides port).\n");
+						printf("     --help                Display this help.\n");
+						printf(" -v, --verbose             Be verbose, can be specified more than once.\n");
+						printf("     --base-url=URL        Base URL to the server (i.e. http://localhost:8080)\n");
+						printf(" -p, --port=PORT           Port to listen (default: 8080)\n");
+						printf("     --object-dir=PATH     Path to a directory where to store the objects (default: current directory)\n");
+						printf("     --socket=PATH         Path to socket (overrides port).\n");
+						printf("     --chroot=PATH         Path to chroot (root only).\n");
+						printf("     --chroot-user=USER    Username for chroot (default: nobody).\n");
+						printf("     --chroot-group=GROUP  Group for chroot (default: nobody).\n");
 						return -1;
 						break;
 					case 2: /* base-url */
@@ -145,12 +155,6 @@ int main(int argc, char *argv[])
 							fprintf(stderr, "Invalid object path. Too long.\n");
 							return -1;
 						}
-						
-						if(!os_is_directory(options.object_path))
-						{
-							fprintf(stderr, "%s: Path is not a valid directory.\n", options.object_path);
-							return -1;
-						}
 						break;
 					}
 					case 5: /* socket */
@@ -162,8 +166,44 @@ int main(int argc, char *argv[])
 						}
 					}
 						break;
+					case 6: /* chroot */
+						if(strlcpy(chroot_path, optarg, sizeof(chroot_path)) >= sizeof(chroot_path))
+						{
+							fprintf(stderr, "Invalid chroot path. Too long.\n");
+							return -1;
+						}
+						break;
+					case 7: /* chroot-user */
+						if(strlcpy(chroot_user, optarg, sizeof(chroot_user)) >= sizeof(chroot_user))
+						{
+							fprintf(stderr, "Invalid user name. Too long.\n");
+							return -1;
+						}
+						break;
+					case 8: /* chroot-group */
+						if(strlcpy(chroot_group, optarg, sizeof(chroot_group)) >= sizeof(chroot_group))
+						{
+							fprintf(stderr, "Invalid group name. Too long.\n");
+							return -1;
+						}
+						break;
 				}
 		}
+	}
+	
+	if(chroot_path[0] != 0)
+	{
+		if(os_droproot(chroot_path, chroot_user, chroot_group) < 0)
+		{
+			fprintf(stderr, "Failed to chroot and set user/group name.\n");
+			return -1;
+		}
+	}
+	
+	if(!os_is_directory(options.object_path))
+	{
+		fprintf(stderr, "%s: Path is not a valid directory.\n", options.object_path);
+		return -1;
 	}
 
 	FCGX_Request request;
