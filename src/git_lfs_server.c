@@ -548,7 +548,7 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 		{
 			git_lfs_server_handle_batch(options, io);
 		} else if(strncmp(uri, "/verify/", 8) == 0) {
-			if(strlcpy(access_token, uri + 8, ACCESS_TOKEN_SIZE) < ACCESS_TOKEN_SIZE) {
+			if(strlcpy(access_token, uri + 8, ACCESS_TOKEN_SIZE) != (ACCESS_TOKEN_SIZE - 1)) {
 				git_lfs_write_error(io, 400, "Invalid access token.");
 			} else {
 				git_lfs_verify(options, io, access_token);
