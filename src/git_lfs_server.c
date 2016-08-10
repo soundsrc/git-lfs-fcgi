@@ -384,7 +384,7 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 		return;
 	}
 
-	if(os_file_exists(object_path))
+	if(!os_file_exists(object_path))
 	{
 		os_mkdir(object_path, 0700);
 	}
