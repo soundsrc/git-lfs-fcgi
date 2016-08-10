@@ -235,13 +235,13 @@ int main(int argc, char *argv[])
 #ifdef OpenBSD5_9
 		if(strchr(socket_path, ':') != NULL) {
 			// network socket fcgi
-			if(pledge("stdio cpath inet", NULL) < 0) {
+			if(pledge("stdio cpath rpath wpath inet", NULL) < 0) {
 					fprintf(stderr, "pledge() error.\n");
 					exit(-1);
 			}
 		} else {
 			// unix socket fcgi
-			if(pledge("stdio cpath unix", NULL) < 0) {
+			if(pledge("stdio cpath rpath wpath unix", NULL) < 0) {
 				fprintf(stderr, "pledge() error.\n");
 				exit(-1);
 			}
