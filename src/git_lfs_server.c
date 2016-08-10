@@ -88,7 +88,7 @@ static const struct git_lfs_access_token *glf_lfs_create_access_token(long expir
 	if(free_index >= 0)
 	{
 		for(int i = 0; i < 15; i++) {
-			s_access_tokens[free_index].token[i] = character_list[arc4random() % sizeof(character_list)];
+			s_access_tokens[free_index].token[i] = character_list[arc4random() % (sizeof(character_list) - 1)];
 		}
 		s_access_tokens[free_index].token[15] = 0;
 		s_access_tokens[free_index].expire = time(NULL) + expire_secs * 2;
