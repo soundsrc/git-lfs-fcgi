@@ -532,7 +532,7 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 	} else if(strcmp(method, "PUT") == 0) {
 		
 		if(strncmp(uri, "/upload/", 8) == 0) {
-			if(strlcpy(access_token, uri + 8, ACCESS_TOKEN_SIZE - 1) < ACCESS_TOKEN_SIZE - 1) {
+			if(strlcpy(access_token, uri + 8, ACCESS_TOKEN_SIZE) < ACCESS_TOKEN_SIZE) {
 				git_lfs_write_error(io, 400, "Invalid access token.");
 			} else {
 				git_lfs_upload(options, io, access_token, uri + 8 + ACCESS_TOKEN_SIZE);
