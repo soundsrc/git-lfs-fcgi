@@ -1,5 +1,6 @@
 solution "git-lfs-server"
 	location(_WORKING_DIR)
+	targetdir(_WORKING_DIR)
 
 	configurations { "Debug", "Release" }
 	configuration "Debug"
