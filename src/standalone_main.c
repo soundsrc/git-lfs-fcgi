@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
 		{ "object-dir", required_argument, 0, 0 },
 		{ 0, 0, 0, 0 }
 	};
-	
+
 	memset(&options, 0, sizeof(options));
 	strlcpy(options.object_path, ".", sizeof(options.object_path));
 	strlcpy(options.base_url, "http://localhost:8080", sizeof(options.base_url));
@@ -143,7 +143,7 @@ int main(int argc, char *argv[])
 						printf(" -v, --verbose           Be verbose, can be specified more than once.\n");
 						printf("     --base-url=HOST     Base url of this server (i.e. http://localhost:8080)\n");
 						printf(" -p, --port=PORT         Port to listen (default: 8080)\n");
-						printf("     --object-dir=PATH   Path to a directory where to store the objects (default: current directory)\n");
+						printf("     --object-dir=PATH   Path to a directory where to store the objects (default: use /info/lfs in repo)\n");
 						return -1;
 						break;
 					case 2: /* base-url */

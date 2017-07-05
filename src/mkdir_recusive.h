@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 Sound <sound@sagaforce.com>
+ * Copyright (c) 2017 Sound <sound@sagaforce.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,21 +13,9 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#ifndef OPTIONS_H
-#define OPTIONS_H
+#ifndef MKDIR_RECURSIVE_H
+#define MKDIR_RECURSIVE_H
 
-#include <stddef.h>
-#include <limits.h>
+int mkdir_recursive(const char *path, int mode);
 
-#ifndef PATH_MAX
-#define PATH_MAX 1024
 #endif
-
-struct options
-{
-	int verbose;
-	char object_path[PATH_MAX];
-	int port;
-};
-
-#endif /* options_h */

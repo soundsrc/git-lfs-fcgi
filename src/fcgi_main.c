@@ -91,7 +91,6 @@ int main(int argc, char *argv[])
 	{
 		{ "help", no_argument, 0, 0 },
 		{ "verbose", no_argument, 0, 'v' },
-		{ "base-url", required_argument, 0, 0 },
 		{ "port", required_argument, 0, 'p' },
 		{ "object-dir", required_argument, 0, 0 },
 		{ "socket", required_argument, 0, 0 },
@@ -103,7 +102,6 @@ int main(int argc, char *argv[])
 	
 	memset(&options, 0, sizeof(options));
 	strlcpy(options.object_path, ".", sizeof(options.object_path));
-	strlcpy(options.base_url, "http://localhost:8080", sizeof(options.base_url));
 	options.port = 8080;
 	
 	int opt_index;
@@ -142,14 +140,7 @@ int main(int argc, char *argv[])
 						printf("     --chroot-group=GROUP  Group for chroot (default: nobody).\n");
 						return -1;
 						break;
-					case 2: /* base-url */
-						if(strlcpy(options.base_url, optarg, sizeof(options.base_url)) >= sizeof(options.base_url))
-						{
-							fprintf(stderr, "Invalid hostname. Too long.\n");
-							return -1;
-						}
-						break;
-					case 4: /* object-dir */
+					case 3: /* object-dir */
 					{
 						if(strlcpy(options.object_path, optarg, sizeof(options.object_path)) >= sizeof(options.object_path))
 						{
@@ -158,7 +149,7 @@ int main(int argc, char *argv[])
 						}
 						break;
 					}
-					case 5: /* socket */
+					case 4: /* socket */
 					{
 						if(strlcpy(socket_path, optarg, sizeof(socket_path)) >= sizeof(socket_path))
 						{
@@ -167,21 +158,21 @@ int main(int argc, char *argv[])
 						}
 					}
 						break;
-					case 6: /* chroot */
+					case 5: /* chroot */
 						if(strlcpy(chroot_path, optarg, sizeof(chroot_path)) >= sizeof(chroot_path))
 						{
 							fprintf(stderr, "Invalid chroot path. Too long.\n");
 							return -1;
 						}
 						break;
-					case 7: /* chroot-user */
+					case 6: /* chroot-user */
 						if(strlcpy(chroot_user, optarg, sizeof(chroot_user)) >= sizeof(chroot_user))
 						{
 							fprintf(stderr, "Invalid user name. Too long.\n");
 							return -1;
 						}
 						break;
-					case 8: /* chroot-group */
+					case 7: /* chroot-group */
 						if(strlcpy(chroot_group, optarg, sizeof(chroot_group)) >= sizeof(chroot_group))
 						{
 							fprintf(stderr, "Invalid group name. Too long.\n");
@@ -208,7 +199,6 @@ int main(int argc, char *argv[])
 	}
 
 	if(options.verbose) {
-		printf("Base URL: %s\n", options.base_url);
 		printf("Objects Path: %s\n", options.object_path);
 		printf("Socket Path: %s\n", socket_path);
 		if(chroot_path[0]) {
@@ -263,25 +253,49 @@ int main(int argc, char *argv[])
 
 		const char *request_method = FCGX_GetParam("REQUEST_METHOD", request.envp);
 		const char *document_uri = FCGX_GetParam("DOCUMENT_URI", request.envp);
-		//const char *queryString = FCGX_GetParam("QUERY_STRING", request.envp);
 
-		const char *uri_minus_scheme = strstr(options.base_url, "://");
-		if(uri_minus_scheme) {
-			uri_minus_scheme += 3;
+		const char *server_name = FCGX_GetParam("SERVER_NAME", request.envp);
+		const char *server_port = FCGX_GetParam("SERVER_PORT", request.envp);
+		
+		char base_url[4096];
+		char end_point[256];
+		if(atol(server_port) == 443) {
+			strlcpy(base_url, "https://", sizeof(base_url));
 		} else {
-			uri_minus_scheme = options.base_url;
+			strlcpy(base_url, "http://", sizeof(base_url));
 		}
-
-		const char *base_doc_uri = strchr(uri_minus_scheme, '/');
-		int uri_root_len = strlen(base_doc_uri);
-		if(strncmp(base_doc_uri, document_uri, uri_root_len) == 0)
+		
+		if(strlcat(base_url, server_name, sizeof(base_url)) >= sizeof(base_url))
 		{
-			const char *end_point = document_uri + uri_root_len;
-			if(*end_point != '/') --end_point;
-
-			git_lfs_server_handle_request(&options, &io, request_method, end_point);
+			goto done;
+		}
+		
+		if(strlcat(base_url, document_uri, sizeof(base_url)) >= sizeof(base_url))
+		{
+			goto done;
+		}
+		
+		static const char *valid_end_points[] = {
+			"/objects/batch",
+			"/upload",
+			"/download",
+			"/verify"
+		};
+		
+		for(int i = 0; i < sizeof(valid_end_points) / sizeof(valid_end_points[0]); ++i)
+		{
+			char *end_point_ptr;
+			if((end_point_ptr = strstr(base_url, valid_end_points[i]))) {
+				if(strlcpy(end_point, end_point_ptr, sizeof(end_point)) >= sizeof(end_point)) {
+					goto done;
+				}
+				*end_point_ptr = 0;
+				break;
+			}
 		}
 
+		git_lfs_server_handle_request(&options, &io, base_url, request_method, end_point);
+done:
 		FCGX_Finish_r(&request);
 	}
 
