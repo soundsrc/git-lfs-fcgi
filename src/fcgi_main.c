@@ -258,7 +258,7 @@ int main(int argc, char *argv[])
 		const char *server_port = FCGX_GetParam("SERVER_PORT", request.envp);
 		
 		char base_url[4096]; // i.e. http://base.url/path/to.git/info/lfs
-		char end_point[256]; // i.e. /object/batch
+		char end_point[256] = ""; // i.e. /object/batch
 		char repo_tag[4096] = "__default"; // i.e. path_to.git_info_lfs
 		const char *repo_path_start;
 
