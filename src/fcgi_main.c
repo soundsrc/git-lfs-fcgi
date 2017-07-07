@@ -298,7 +298,8 @@ int main(int argc, char *argv[])
 				
 				// if the repo has a path, extract it as the repo_tag
 				// this is mainly used to separate repo objects
-				if(end_point_ptr > repo_path_start &&
+				if(options.use_repo_tags &&
+				   end_point_ptr > repo_path_start &&
 				   end_point_ptr - repo_path_start < sizeof(repo_tag) - 1)
 				{
 					strlcpy(repo_tag, repo_path_start, end_point_ptr - repo_path_start + 1);

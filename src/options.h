@@ -28,6 +28,7 @@ struct options
 	int verbose;
 	char object_path[PATH_MAX];
 	int port;
+	int use_repo_tags;
 };
 
 #endif /* options_h */
