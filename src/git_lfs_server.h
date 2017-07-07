@@ -20,6 +20,6 @@ struct socket_io;
 struct options;
 
 void git_lfs_init();
-void git_lfs_server_handle_request(const struct options *options, const struct socket_io *io, const char *base_url, const char *method, const char *end_point);
+void git_lfs_server_handle_request(const struct options *options, const struct socket_io *io, const char *base_url, const char *repo_tag, const char *method, const char *end_point);
 
 #endif

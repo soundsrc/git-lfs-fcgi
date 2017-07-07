@@ -257,8 +257,11 @@ int main(int argc, char *argv[])
 		const char *server_name = FCGX_GetParam("SERVER_NAME", request.envp);
 		const char *server_port = FCGX_GetParam("SERVER_PORT", request.envp);
 		
-		char base_url[4096];
-		char end_point[256];
+		char base_url[4096]; // i.e. http://base.url/path/to.git/info/lfs
+		char end_point[256]; // i.e. /object/batch
+		char repo_tag[4096] = "__default"; // i.e. path_to.git_info_lfs
+		const char *repo_path_start;
+
 		if(atol(server_port) == 443) {
 			strlcpy(base_url, "https://", sizeof(base_url));
 		} else {
@@ -270,6 +273,8 @@ int main(int argc, char *argv[])
 			goto done;
 		}
 		
+		repo_path_start = base_url + strlen(base_url);
+
 		if(strlcat(base_url, document_uri, sizeof(base_url)) >= sizeof(base_url))
 		{
 			goto done;
@@ -286,15 +291,28 @@ int main(int argc, char *argv[])
 		{
 			char *end_point_ptr;
 			if((end_point_ptr = strstr(base_url, valid_end_points[i]))) {
+				
 				if(strlcpy(end_point, end_point_ptr, sizeof(end_point)) >= sizeof(end_point)) {
 					goto done;
 				}
+				
+				// if the repo has a path, extract it as the repo_tag
+				// this is mainly used to separate repo objects
+				if(end_point_ptr > repo_path_start &&
+				   end_point_ptr - repo_path_start < sizeof(repo_tag) - 1)
+				{
+					strlcpy(repo_tag, repo_path_start, end_point_ptr - repo_path_start + 1);
+					for(char *p = repo_tag; *p; p++) {
+						if(*p == '/') *p = '_';
+					}
+				}
+
 				*end_point_ptr = 0;
 				break;
 			}
 		}
 
-		git_lfs_server_handle_request(&options, &io, base_url, request_method, end_point);
+		git_lfs_server_handle_request(&options, &io, base_url, repo_tag, request_method, end_point);
 done:
 		FCGX_Finish_r(&request);
 	}

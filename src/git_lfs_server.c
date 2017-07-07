@@ -350,7 +350,7 @@ error0:
 	json_tokener_free(tokener);
 }
 
-static void git_lfs_download(const struct options *options, const struct socket_io *io, const char *access_token)
+static void git_lfs_download(const struct options *options, const struct socket_io *io, const char *repo_tag, const char *access_token)
 {
 	char buffer[4096];
 	int n;
@@ -367,7 +367,7 @@ static void git_lfs_download(const struct options *options, const struct socket_
 		return;
 	}
 
-	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/%s", options->object_path, oid, oid) >= (long)sizeof(object_path))
+	if(snprintf(object_path, sizeof(object_path), "%s/%s/%.2s/%s", options->object_path, repo_tag, oid, oid) >= (long)sizeof(object_path))
 	{
 		git_lfs_write_error(io, 400, "Object path is too long.");
 		return;
@@ -403,7 +403,7 @@ static void git_lfs_download(const struct options *options, const struct socket_
 	fclose(fp);
 }
 
-static void git_lfs_upload(const struct options *options, const struct socket_io *io, const char *access_token)
+static void git_lfs_upload(const struct options *options, const struct socket_io *io, const char *repo_tag, const char *access_token)
 {
 	char buffer[4096];
 	int n;
@@ -415,7 +415,7 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 		return;
 	}
 
-	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/", options->object_path, oid) >= (long)sizeof(object_path))
+	if(snprintf(object_path, sizeof(object_path), "%s/%s/%.2s/", options->object_path, repo_tag, oid) >= (long)sizeof(object_path))
 	{
 		git_lfs_write_error(io, 400, "Object path is too long.");
 		return;
@@ -462,7 +462,7 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 	io->write_headers(io->context, NULL, 0);
 }
 
-static void git_lfs_verify(const struct options *options, const struct socket_io *io, const char *access_token)
+static void git_lfs_verify(const struct options *options, const struct socket_io *io, const char *repo_tag, const char *access_token)
 {
 	char buffer[4096];
 	int n;
@@ -504,7 +504,7 @@ static void git_lfs_verify(const struct options *options, const struct socket_io
 	}
 
 	char object_path[PATH_MAX];
-	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/%s", options->object_path, oid_string, oid_string) >= (long)sizeof(object_path))
+	if(snprintf(object_path, sizeof(object_path), "%s/%s/%.2s/%s", options->object_path, repo_tag, oid_string, oid_string) >= (long)sizeof(object_path))
 	{
 		git_lfs_write_error(io, 400, "Object path is too long.");
 		goto error0;
@@ -541,7 +541,7 @@ void git_lfs_init()
 	s_access_token_mutex = os_mutex_create();
 }
 
-void git_lfs_server_handle_request(const struct options *options, const struct socket_io *io, const char *base_url, const char *method, const char *end_point)
+void git_lfs_server_handle_request(const struct options *options, const struct socket_io *io, const char *base_url, const char *repo_tag, const char *method, const char *end_point)
 {
 	if(options->verbose >= 1)
 	{
@@ -558,7 +558,7 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 	if(strcmp(method, "GET") == 0)
 	{
 		if(strncmp(end_point, "/download/", 10) == 0) {
-			git_lfs_download(options, io, end_point + 10);
+			git_lfs_download(options, io, repo_tag, end_point + 10);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
@@ -566,7 +566,7 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 	} else if(strcmp(method, "PUT") == 0) {
 		
 		if(strncmp(end_point, "/upload/", 8) == 0) {
-			git_lfs_upload(options, io, end_point + 8);
+			git_lfs_upload(options, io, repo_tag, end_point + 8);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
@@ -578,7 +578,7 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 		{
 			git_lfs_server_handle_batch(options, io, base_url);
 		} else if(strncmp(end_point, "/verify/", 8) == 0) {
-			git_lfs_verify(options, io, end_point + 8);
+			git_lfs_verify(options, io, repo_tag, end_point + 8);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
