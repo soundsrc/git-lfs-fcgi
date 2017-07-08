@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+#include <stdarg.h>
 #include <time.h>
 #include <errno.h>
 #include "json.h"
@@ -141,8 +142,14 @@ static void git_lfs_clean_up_access_tokens()
 	os_mutex_unlock(s_access_token_mutex);
 }
 
-static void git_lfs_write_error(const struct socket_io *io, int error_code, const char *message)
+static void git_lfs_write_error(const struct socket_io *io, int error_code, const char *format, ...)
 {
+	char message[4096];
+	va_list va;
+	va_start(va, format);
+	vsnprintf(message, sizeof(message), format, va);
+	va_end(va);
+
 	const char *error_reason = "Unknown error";
 	switch(error_code) {
 		case 400: error_reason = "Bad Request"; break;
@@ -475,9 +482,9 @@ static void git_lfs_verify(const struct options *options, const struct socket_io
 	int n;
 	json_tokener * tokener = json_tokener_new();
 	struct json_object *root = NULL;
-	char oid_dummy[65];
+	char oid_from_token[65];
 	
-	if(!git_lfs_consume_oid_from_access_token(access_token, oid_dummy)) {
+	if(!git_lfs_consume_oid_from_access_token(access_token, oid_from_token)) {
 		git_lfs_write_error(io, 400, "Access token is not valid.");
 		return;
 	}
@@ -509,6 +516,11 @@ static void git_lfs_verify(const struct options *options, const struct socket_io
 		git_lfs_write_error(io, 400, "Invalid oid passed to verify.");
 		goto error0;
 	}
+	
+	if(strcmp(oid_from_token, oid_string) != 0) {
+		git_lfs_write_error(io, 400, "Oid requested does not match oid from access token.");
+		goto error0;
+	}
 
 	char object_path[PATH_MAX];
 	if(snprintf(object_path, sizeof(object_path), "%s/%s/%.2s/%s", options->object_path, repo_tag, oid_string, oid_string) >= (long)sizeof(object_path))
@@ -526,7 +538,7 @@ static void git_lfs_verify(const struct options *options, const struct socket_io
 	
 	if(filesize != json_object_get_int(size))
 	{
-		git_lfs_write_error(io, 422, "Object size does not match the request.");
+		git_lfs_write_error(io, 422, "Object size (%ld bytes) does not match the verify size (%d bytes).", filesize, json_object_get_int(size));
 		goto error0;
 	}
 	
