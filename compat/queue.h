@@ -32,11 +32,12 @@
  *	@(#)queue.h	8.5 (Berkeley) 8/20/94
  */
 
-#ifndef	_SYS_QUEUE_H_
-#define	_SYS_QUEUE_H_
+#ifndef	COMPAT_QUEUE_H
+#define	COMPAT_QUEUE_H
 
 #if defined(__FreeBSD__) || \
-	defined(__OpenBSD__)
+	defined(__OpenBSD__) || \
+	defined(__APPLE__)
 #include <sys/queue.h>
 #else
 
