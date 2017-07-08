@@ -59,38 +59,6 @@ solution "git-lfs-server"
 			"external/libfcgi/libfcgi/os_unix.c",
 		}
 
-	project "git-lfs-server-standalone"
-		kind "ConsoleApp"
-		language "C"
-		buildoptions { "-std=c99" }
-		includedirs {
-			".",
-			"external/json-c",
-			"external/mongoose",
-			"/usr/local/include",
-		}
-		libdirs { "/usr/local/lib" }
-		files { 
-			"src/*.c",
-			"src/*.h",
-			"compat/*.h",
-			"os/*.h"
-		}
-
-		files {
-			"os/unix/*.c"
-		}
-
-		if not os.is("bsd") and not os.is("macosx") then
-			files { 
-				"compat/*.cpp", 
-				"compat/*.c",
-			}
-		end
-		excludes {
-			"src/fcgi_main.c"
-		}
-		links { "mongoose", "json-c", "pthread" }
 	project "git-lfs-server-fcgi"
 		kind "ConsoleApp"
 		language "C"
