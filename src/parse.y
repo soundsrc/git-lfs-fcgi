@@ -27,8 +27,8 @@ void parse_init(const char *filename, struct git_lfs_config *config)
 %token CHROOT_USER
 %token CHROOT_GROUP
 %token SOCKET
-%token INTEGER
-%token STRING
+%token <ival> INTEGER
+%token <sval> STRING
 %token INCLUDE
 
 %%
@@ -44,17 +44,36 @@ declarations
 	;
 
 global_declaration
-	: BASE_URL STRING
-	| CHROOT STRING
-	| CHROOT_USER STRING
-	| CHROOT_GROUP STRING
-	| NUM_THREADS INTEGER
-	| SOCKET STRING
+	: BASE_URL STRING {
+		parse_config->base_url = strndup($2, sizeof($2));
+	}
+	| CHROOT STRING {
+		parse_config->chroot = strndup($2, sizeof($2));	
+	}
+	| CHROOT_USER STRING {
+		parse_config->chroot_user = strndup($2, sizeof($2));	
+	}
+	| CHROOT_GROUP STRING {
+		parse_config->chroot_group = strndup($2, sizeof($2));	
+	}
+	| NUM_THREADS INTEGER {
+		parse_config->num_threads = $2;
+	}
+	| SOCKET STRING {
+		parse_config->socket = strndup($2, sizeof($2));	
+	}
 	| INCLUDE STRING
 	;
 
 repo_declaration
-	: REPO STRING '{' repo_params_list '}'
+	: REPO STRING {
+		parse_repo = (struct git_lfs_repo *)calloc(1, sizeof(struct git_lfs_repo));
+		parse_repo->name = strndup($2, sizeof($2));
+	}
+	'{' repo_params_list '}' {
+		SLIST_INSERT_HEAD(&parse_config->repos, parse_repo, entries);
+		parse_repo = NULL;
+	}
 	;
 
 repo_params_list
@@ -63,6 +82,10 @@ repo_params_list
  	;
 
 repo_param
- 	: ROOT STRING
- 	| URI STRING
+ 	: ROOT STRING {
+ 		parse_repo->root_dir = strndup($2, sizeof($2));	
+ 	}
+ 	| URI STRING {
+ 		parse_repo->uri = strndup($2, sizeof($2));	
+ 	}
  	;

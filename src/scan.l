@@ -27,7 +27,8 @@ socket { return SOCKET; }
 include { return INCLUDE; }
 
 \"(\\.|[^\\"])*\" { 
-	strlcpy(yylval.sval, yytext, sizeof(yylval.sval));
+	size_t n = strlen(yytext) - 2;
+	strlcpy(yylval.sval, yytext + 1, n + 1);
 	return STRING; 
 }
 
