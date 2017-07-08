@@ -22,7 +22,7 @@
 
 int yyerror (const char *msg)
 {
-	printf("%s\n", msg);
+	printf("%s:%d: %s\n", parse_filename, scan_line_count, msg);
 	return 0;
 }
 
