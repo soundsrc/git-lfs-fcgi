@@ -36,7 +36,8 @@ include { return INCLUDE; }
 	yylval.ival = strtol(yytext, NULL, 0);
 	return INTEGER;
 }
- [ \t\r\n]+ /* eat whitespace */
+\n { scan_line_count++; }
+[ \t\r]+ /* eat whitespace */
 "{" { return '{'; }
 "}" { return '}'; }
-\n { scan_line_count++; }
+
