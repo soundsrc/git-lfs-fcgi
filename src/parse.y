@@ -1,7 +1,16 @@
 %{
 #include <stdlib.h>
 
-static struct git_lfs_config *config;
+static const char *parse_filename;
+static struct git_lfs_config *parse_config;
+static struct git_lfs_repo *parse_repo;
+
+void parse_init(const char *filename, struct git_lfs_config *config)
+{
+	parse_filename = filename;
+	parse_config = config;
+	parse_repo = NULL;
+}
 %}
 
 %union {

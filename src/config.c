@@ -34,9 +34,12 @@ struct git_lfs_config *git_lfs_load_config(const char *path)
 		return NULL;
 	}
 	
-	config = (struct git_lfs_config *)malloc(sizeof(struct git_lfs_config));
-	memset(config, 0, sizeof(struct git_lfs_config));
+	struct git_lfs_config *config = (struct git_lfs_config *)calloc(1, sizeof(struct git_lfs_config));
+
 	SLIST_INIT(&config->repos);
+
+	scan_init();
+	parse_init(path, config);
 
 	yyparse();
 	

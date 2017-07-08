@@ -1,5 +1,12 @@
 %{
 #include "y.tab.h"
+
+static int scan_line_count;
+
+static void scan_init()
+{
+	scan_line_count = 1;
+}
 %}
 %option noyywrap
 
@@ -31,3 +38,4 @@ include { return INCLUDE; }
  [ \t\r\n]+ /* eat whitespace */
 "{" { return '{'; }
 "}" { return '}'; }
+\n { scan_line_count++; }
