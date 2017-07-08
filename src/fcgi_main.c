@@ -26,12 +26,15 @@
 #include <getopt.h>
 #include "compat/string.h"
 #include "os/filesystem.h"
+#include "os/mutex.h"
+#include "os/threads.h"
 #include "os/droproot.h"
 #include "options.h"
 #include "socket_io.h"
 #include "git_lfs_server.h"
 
 static struct options options;
+static os_mutex_t accept_mutex;
 
 static int io_fcgi_read(void *context, void *buffer, int size)
 {
@@ -79,6 +82,107 @@ static void io_fcgi_flush(void *context)
 	FCGX_FFlush(request->out);
 }
 
+struct thread_info
+{
+	int listening_socket;
+};
+
+static void *handle_request(void *data)
+{
+	FCGX_Request request;
+	struct thread_info *info = (struct thread_info *)data;
+	
+	FCGX_InitRequest(&request, info->listening_socket, 0);
+
+	for (;;) {
+		
+		os_mutex_lock(accept_mutex);
+		int rc = FCGX_Accept_r(&request);
+		os_mutex_unlock(accept_mutex);
+
+		if(rc < 0) break;
+		
+		struct socket_io io;
+		
+		memset(&io, 0, sizeof(io));
+		io.context = &request;
+		io.read = io_fcgi_read;
+		io.write = io_fcgi_write;
+		io.write_http_status = io_fcgi_write_http_status;
+		io.write_headers = io_fcgi_write_headers;
+		io.printf = io_fcgi_printf;
+		io.flush = io_fcgi_flush;
+		
+		const char *request_method = FCGX_GetParam("REQUEST_METHOD", request.envp);
+		const char *document_uri = FCGX_GetParam("DOCUMENT_URI", request.envp);
+		
+		const char *server_name = FCGX_GetParam("SERVER_NAME", request.envp);
+		const char *server_port = FCGX_GetParam("SERVER_PORT", request.envp);
+		
+		char base_url[4096]; // i.e. http://base.url/path/to.git/info/lfs
+		char end_point[256] = ""; // i.e. /object/batch
+		char repo_tag[4096] = "__default"; // i.e. path_to.git_info_lfs
+		const char *repo_path_start;
+		
+		if(atol(server_port) == 443) {
+			strlcpy(base_url, "https://", sizeof(base_url));
+		} else {
+			strlcpy(base_url, "http://", sizeof(base_url));
+		}
+		
+		if(strlcat(base_url, server_name, sizeof(base_url)) >= sizeof(base_url))
+		{
+			goto done;
+		}
+		
+		repo_path_start = base_url + strlen(base_url);
+		
+		if(strlcat(base_url, document_uri, sizeof(base_url)) >= sizeof(base_url))
+		{
+			goto done;
+		}
+		
+		static const char *valid_end_points[] = {
+			"/objects/batch",
+			"/upload",
+			"/download",
+			"/verify"
+		};
+		
+		for(int i = 0; i < sizeof(valid_end_points) / sizeof(valid_end_points[0]); ++i)
+		{
+			char *end_point_ptr;
+			if((end_point_ptr = strstr(base_url, valid_end_points[i]))) {
+				
+				if(strlcpy(end_point, end_point_ptr, sizeof(end_point)) >= sizeof(end_point)) {
+					goto done;
+				}
+				
+				// if the repo has a path, extract it as the repo_tag
+				// this is mainly used to separate repo objects
+				if(options.use_repo_tags &&
+				   end_point_ptr > repo_path_start &&
+				   end_point_ptr - repo_path_start < sizeof(repo_tag) - 1)
+				{
+					strlcpy(repo_tag, repo_path_start, end_point_ptr - repo_path_start + 1);
+					for(char *p = repo_tag; *p; p++) {
+						if(*p == '/') *p = '_';
+					}
+				}
+				
+				*end_point_ptr = 0;
+				break;
+			}
+		}
+		
+		git_lfs_server_handle_request(&options, &io, base_url, repo_tag, request_method, end_point);
+	done:
+		FCGX_Finish_r(&request);
+	}
+	
+	return NULL;
+}
+
 int main(int argc, char *argv[])
 {
     char socket_path[PATH_MAX] = ":8080";
@@ -97,12 +201,16 @@ int main(int argc, char *argv[])
 		{ "chroot", required_argument, 0, 0 },
 		{ "chroot-user", required_argument, 0, 0 },
 		{ "chroot-group", required_argument, 0, 0 },
+		{ "threads", required_argument, 0, 0 },
 		{ 0, 0, 0, 0 }
 	};
+	
+	accept_mutex = os_mutex_create();
 	
 	memset(&options, 0, sizeof(options));
 	strlcpy(options.object_path, ".", sizeof(options.object_path));
 	options.port = 8080;
+	options.num_threads = 5;
 	
 	int opt_index;
 	int c;
@@ -138,6 +246,7 @@ int main(int argc, char *argv[])
 						printf("     --chroot=PATH         Path to chroot (root only).\n");
 						printf("     --chroot-user=USER    Username for chroot (default: nobody).\n");
 						printf("     --chroot-group=GROUP  Group for chroot (default: nobody).\n");
+						printf("     --threads=N           Number of threads to spawn.");
 						return -1;
 						break;
 					case 3: /* object-dir */
@@ -179,6 +288,15 @@ int main(int argc, char *argv[])
 							return -1;
 						}
 						break;
+					case 8: /* threads */
+						{
+							options.num_threads = atol(optarg);
+							if(options.num_threads < 1 || options.num_threads > 256) {
+								fprintf(stderr, "Number of threads must be between 1-256.\n");
+								return -1;
+							}
+						}
+						break;
 				}
 		}
 	}
@@ -208,8 +326,6 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	FCGX_Request request;
-
 	FCGX_Init();
 
     int listening_socket = FCGX_OpenSocket(socket_path, max_connections);
@@ -218,105 +334,35 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	FCGX_InitRequest(&request, listening_socket, 0);
-
 	git_lfs_init();
 
 #ifdef OpenBSD5_9
-		if(strchr(socket_path, ':') != NULL) {
-			// network socket fcgi
-			if(pledge("stdio cpath rpath wpath inet", NULL) < 0) {
-					fprintf(stderr, "pledge() error.\n");
-					exit(-1);
-			}
-		} else {
-			// unix socket fcgi
-			if(pledge("stdio cpath rpath wpath unix", NULL) < 0) {
+	if(strchr(socket_path, ':') != NULL) {
+		// network socket fcgi
+		if(pledge("stdio cpath rpath wpath inet", NULL) < 0) {
 				fprintf(stderr, "pledge() error.\n");
 				exit(-1);
-			}
 		}
+	} else {
+		// unix socket fcgi
+		if(pledge("stdio cpath rpath wpath unix", NULL) < 0) {
+			fprintf(stderr, "pledge() error.\n");
+			exit(-1);
+		}
+	}
 #endif
 
-    while (FCGX_Accept_r(&request) == 0) {
+	struct thread_info *thread_infos = (struct thread_info *)malloc(sizeof(struct thread_info) * options.num_threads);
 
-		struct socket_io io;
-		
-		memset(&io, 0, sizeof(io));
-		io.context = &request;
-		io.read = io_fcgi_read;
-		io.write = io_fcgi_write;
-		io.write_http_status = io_fcgi_write_http_status;
-		io.write_headers = io_fcgi_write_headers;
-		io.printf = io_fcgi_printf;
-		io.flush = io_fcgi_flush;
-
-		const char *request_method = FCGX_GetParam("REQUEST_METHOD", request.envp);
-		const char *document_uri = FCGX_GetParam("DOCUMENT_URI", request.envp);
-
-		const char *server_name = FCGX_GetParam("SERVER_NAME", request.envp);
-		const char *server_port = FCGX_GetParam("SERVER_PORT", request.envp);
-		
-		char base_url[4096]; // i.e. http://base.url/path/to.git/info/lfs
-		char end_point[256] = ""; // i.e. /object/batch
-		char repo_tag[4096] = "__default"; // i.e. path_to.git_info_lfs
-		const char *repo_path_start;
-
-		if(atol(server_port) == 443) {
-			strlcpy(base_url, "https://", sizeof(base_url));
-		} else {
-			strlcpy(base_url, "http://", sizeof(base_url));
-		}
-		
-		if(strlcat(base_url, server_name, sizeof(base_url)) >= sizeof(base_url))
-		{
-			goto done;
-		}
-		
-		repo_path_start = base_url + strlen(base_url);
-
-		if(strlcat(base_url, document_uri, sizeof(base_url)) >= sizeof(base_url))
-		{
-			goto done;
-		}
-		
-		static const char *valid_end_points[] = {
-			"/objects/batch",
-			"/upload",
-			"/download",
-			"/verify"
-		};
-		
-		for(int i = 0; i < sizeof(valid_end_points) / sizeof(valid_end_points[0]); ++i)
-		{
-			char *end_point_ptr;
-			if((end_point_ptr = strstr(base_url, valid_end_points[i]))) {
-				
-				if(strlcpy(end_point, end_point_ptr, sizeof(end_point)) >= sizeof(end_point)) {
-					goto done;
-				}
-				
-				// if the repo has a path, extract it as the repo_tag
-				// this is mainly used to separate repo objects
-				if(options.use_repo_tags &&
-				   end_point_ptr > repo_path_start &&
-				   end_point_ptr - repo_path_start < sizeof(repo_tag) - 1)
-				{
-					strlcpy(repo_tag, repo_path_start, end_point_ptr - repo_path_start + 1);
-					for(char *p = repo_tag; *p; p++) {
-						if(*p == '/') *p = '_';
-					}
-				}
-
-				*end_point_ptr = 0;
-				break;
-			}
-		}
-
-		git_lfs_server_handle_request(&options, &io, base_url, repo_tag, request_method, end_point);
-done:
-		FCGX_Finish_r(&request);
+	for(int i = 1; i < options.num_threads; i++) {
+		thread_infos[i].listening_socket = listening_socket;
+		os_thread_create(handle_request, &thread_infos[i]);
 	}
+
+	thread_infos[0].listening_socket = listening_socket;
+	handle_request(&thread_infos[0]);
+
+	free(thread_infos);
 
 	return 0;
 }

@@ -29,6 +29,7 @@ struct options
 	char object_path[PATH_MAX];
 	int port;
 	int use_repo_tags;
+	int num_threads;
 };
 
 #endif /* options_h */
