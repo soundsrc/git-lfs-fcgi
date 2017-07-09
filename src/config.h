@@ -19,6 +19,10 @@
 
 #include "compat/queue.h"
 
+#ifndef PATH_MAX
+#define PATH_MAX 1024
+#endif
+
 struct git_lfs_repo
 {
 	SLIST_ENTRY(git_lfs_repo) entries;

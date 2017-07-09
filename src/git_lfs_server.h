@@ -18,8 +18,10 @@
 
 struct socket_io;
 struct options;
+struct git_lfs_config;
 
 void git_lfs_init();
-void git_lfs_server_handle_request(const struct options *options, const struct socket_io *io, const char *base_url, const char *repo_tag, const char *method, const char *end_point);
+void git_lfs_server_handle_request(const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *method, const char *end_point);
+void git_lfs_write_error(const struct socket_io *io, int error_code, const char *format, ...);
 
 #endif

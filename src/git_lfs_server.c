@@ -24,7 +24,7 @@
 #include "compat/string.h"
 #include "os/filesystem.h"
 #include "os/mutex.h"
-#include "options.h"
+#include "config.h"
 #include "socket_io.h"
 #include "mkdir_recusive.h"
 #include "git_lfs_server.h"
@@ -142,7 +142,7 @@ static void git_lfs_clean_up_access_tokens()
 	os_mutex_unlock(s_access_token_mutex);
 }
 
-static void git_lfs_write_error(const struct socket_io *io, int error_code, const char *format, ...)
+void git_lfs_write_error(const struct socket_io *io, int error_code, const char *format, ...)
 {
 	char message[4096];
 	va_list va;
@@ -180,7 +180,7 @@ static void git_lfs_write_error(const struct socket_io *io, int error_code, cons
 	json_object_put(error);
 }
 
-static void git_lfs_server_handle_batch(const struct options *options, const struct socket_io *io, const char *base_url)
+static void git_lfs_server_handle_batch(const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io)
 {
 	char buffer[4096];
 	int n;
@@ -198,7 +198,7 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 		}
 	}
 	
-	if(options->verbose >= 2)
+	if(config->verbose >= 2)
 	{
 		printf("> %s\n", json_object_get_string(root));
 	}
@@ -282,7 +282,7 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 				char url[1024];
 
 				// add upload url
-				if(snprintf(url, sizeof(url), "%s/upload/%s", base_url, access_token->token) >= (long)sizeof(url)) {
+				if(snprintf(url, sizeof(url), "%s/%s/upload/%s", config->base_url, repo->uri, access_token->token) >= (long)sizeof(url)) {
 					git_lfs_write_error(io, 400, "Upload URL is too long.");
 					json_object_put(actions);
 					json_object_put(out);
@@ -295,7 +295,7 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 				json_object_object_add(actions, "upload", upload);
 				
 				// add verify url
-				if(snprintf(url, sizeof(url), "%s/verify/%s", base_url, access_token->token) >= (long)sizeof(url)) {
+				if(snprintf(url, sizeof(url), "%s/%s/verify/%s", config->base_url, repo->uri, access_token->token) >= (long)sizeof(url)) {
 					git_lfs_write_error(io, 400, "Upload URL is too long.");
 					json_object_put(actions);
 					json_object_put(out);
@@ -314,7 +314,7 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 			{
 				char download_url[1024];
 				
-				if(snprintf(download_url, sizeof(download_url), "%s/download/%s", base_url, access_token->token) >= (long)sizeof(download_url)) {
+				if(snprintf(download_url, sizeof(download_url), "%s/%s/download/%s", config->base_url, repo->uri, access_token->token) >= (long)sizeof(download_url)) {
 					git_lfs_write_error(io, 400, "Download URL is too long.");
 					json_object_put(actions);
 					json_object_put(out);
@@ -351,7 +351,7 @@ static void git_lfs_server_handle_batch(const struct options *options, const str
 	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
 	io->write(io->context, response_json, strlen(response_json));
 	
-	if(options->verbose >= 2)
+	if(config->verbose >= 2)
 	{
 		printf("< %s\n", response_json);
 	}
@@ -364,13 +364,13 @@ error0:
 	json_tokener_free(tokener);
 }
 
-static void git_lfs_download(const struct options *options, const struct socket_io *io, const char *repo_tag, const char *access_token)
+static void git_lfs_download(const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *access_token)
 {
 	char buffer[4096];
 	int n;
-	char object_path[PATH_MAX];
 	char oid[65];
-	
+	char object_path[PATH_MAX];
+
 	if(!git_lfs_consume_oid_from_access_token(access_token, oid)) {
 		git_lfs_write_error(io, 400, "Access token is not valid.");
 		return;
@@ -381,7 +381,7 @@ static void git_lfs_download(const struct options *options, const struct socket_
 		return;
 	}
 
-	if(snprintf(object_path, sizeof(object_path), "%s/%s/%.2s/%s", options->object_path, repo_tag, oid, oid) >= (long)sizeof(object_path))
+	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/%s", repo->root_dir, oid, oid) >= (long)sizeof(object_path))
 	{
 		git_lfs_write_error(io, 400, "Object path is too long.");
 		return;
@@ -417,7 +417,7 @@ static void git_lfs_download(const struct options *options, const struct socket_
 	fclose(fp);
 }
 
-static void git_lfs_upload(const struct options *options, const struct socket_io *io, const char *repo_tag, const char *access_token)
+static void git_lfs_upload(const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *access_token)
 {
 	char buffer[4096];
 	int n;
@@ -429,7 +429,7 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 		return;
 	}
 
-	if(snprintf(object_path, sizeof(object_path), "%s/%s/%.2s/", options->object_path, repo_tag, oid) >= (long)sizeof(object_path))
+	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/", repo->root_dir, oid) >= (long)sizeof(object_path))
 	{
 		git_lfs_write_error(io, 400, "Object path is too long.");
 		return;
@@ -476,7 +476,7 @@ static void git_lfs_upload(const struct options *options, const struct socket_io
 	io->write_headers(io->context, NULL, 0);
 }
 
-static void git_lfs_verify(const struct options *options, const struct socket_io *io, const char *repo_tag, const char *access_token)
+static void git_lfs_verify(const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *access_token)
 {
 	char buffer[4096];
 	int n;
@@ -523,7 +523,7 @@ static void git_lfs_verify(const struct options *options, const struct socket_io
 	}
 
 	char object_path[PATH_MAX];
-	if(snprintf(object_path, sizeof(object_path), "%s/%s/%.2s/%s", options->object_path, repo_tag, oid_string, oid_string) >= (long)sizeof(object_path))
+	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/%s", repo->root_dir, oid_string, oid_string) >= (long)sizeof(object_path))
 	{
 		git_lfs_write_error(io, 400, "Object path is too long.");
 		goto error0;
@@ -560,9 +560,9 @@ void git_lfs_init()
 	s_access_token_mutex = os_mutex_create();
 }
 
-void git_lfs_server_handle_request(const struct options *options, const struct socket_io *io, const char *base_url, const char *repo_tag, const char *method, const char *end_point)
+void git_lfs_server_handle_request(const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *method, const char *end_point)
 {
-	if(options->verbose >= 1)
+	if(config->verbose >= 1)
 	{
 		time_t now;
 		char currentTime[64];
@@ -577,7 +577,7 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 	if(strcmp(method, "GET") == 0)
 	{
 		if(strncmp(end_point, "/download/", 10) == 0) {
-			git_lfs_download(options, io, repo_tag, end_point + 10);
+			git_lfs_download(config, repo, io, end_point + 10);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
@@ -585,7 +585,7 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 	} else if(strcmp(method, "PUT") == 0) {
 		
 		if(strncmp(end_point, "/upload/", 8) == 0) {
-			git_lfs_upload(options, io, repo_tag, end_point + 8);
+			git_lfs_upload(config, repo, io, end_point + 8);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
@@ -595,9 +595,9 @@ void git_lfs_server_handle_request(const struct options *options, const struct s
 		// v1 batch
 		if(strcmp(end_point, "/objects/batch") == 0)
 		{
-			git_lfs_server_handle_batch(options, io, base_url);
+			git_lfs_server_handle_batch(config, repo, io);
 		} else if(strncmp(end_point, "/verify/", 8) == 0) {
-			git_lfs_verify(options, io, repo_tag, end_point + 8);
+			git_lfs_verify(config, repo, io, end_point + 8);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}

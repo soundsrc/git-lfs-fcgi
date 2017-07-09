@@ -29,11 +29,10 @@
 #include "os/mutex.h"
 #include "os/threads.h"
 #include "os/droproot.h"
-#include "options.h"
+#include "config.h"
 #include "socket_io.h"
 #include "git_lfs_server.h"
 
-static struct options options;
 static os_mutex_t accept_mutex;
 
 static int io_fcgi_read(void *context, void *buffer, int size)
@@ -84,6 +83,7 @@ static void io_fcgi_flush(void *context)
 
 struct thread_info
 {
+	const struct git_lfs_config *config;
 	int listening_socket;
 };
 
@@ -116,67 +116,30 @@ static void *handle_request(void *data)
 		const char *request_method = FCGX_GetParam("REQUEST_METHOD", request.envp);
 		const char *document_uri = FCGX_GetParam("DOCUMENT_URI", request.envp);
 		
-		const char *server_name = FCGX_GetParam("SERVER_NAME", request.envp);
-		const char *server_port = FCGX_GetParam("SERVER_PORT", request.envp);
-		
-		char base_url[4096]; // i.e. http://base.url/path/to.git/info/lfs
-		char end_point[256] = ""; // i.e. /object/batch
-		char repo_tag[4096] = "__default"; // i.e. path_to.git_info_lfs
-		const char *repo_path_start;
-		
-		if(atol(server_port) == 443) {
-			strlcpy(base_url, "https://", sizeof(base_url));
-		} else {
-			strlcpy(base_url, "http://", sizeof(base_url));
+		if(!request_method || !document_uri) {
+			git_lfs_write_error(&io, 500, "FCGI error.");
+			continue;
 		}
-		
-		if(strlcat(base_url, server_name, sizeof(base_url)) >= sizeof(base_url))
-		{
-			goto done;
-		}
-		
-		repo_path_start = base_url + strlen(base_url);
-		
-		if(strlcat(base_url, document_uri, sizeof(base_url)) >= sizeof(base_url))
-		{
-			goto done;
-		}
-		
-		static const char *valid_end_points[] = {
-			"/objects/batch",
-			"/upload",
-			"/download",
-			"/verify"
-		};
-		
-		for(int i = 0; i < sizeof(valid_end_points) / sizeof(valid_end_points[0]); ++i)
-		{
-			char *end_point_ptr;
-			if((end_point_ptr = strstr(base_url, valid_end_points[i]))) {
-				
-				if(strlcpy(end_point, end_point_ptr, sizeof(end_point)) >= sizeof(end_point)) {
-					goto done;
-				}
-				
-				// if the repo has a path, extract it as the repo_tag
-				// this is mainly used to separate repo objects
-				if(options.use_repo_tags &&
-				   end_point_ptr > repo_path_start &&
-				   end_point_ptr - repo_path_start < sizeof(repo_tag) - 1)
-				{
-					strlcpy(repo_tag, repo_path_start, end_point_ptr - repo_path_start + 1);
-					for(char *p = repo_tag; *p; p++) {
-						if(*p == '/') *p = '_';
-					}
-				}
-				
-				*end_point_ptr = 0;
+
+		struct git_lfs_repo *repo = NULL, *r;
+		const char *end_point = NULL;
+		SLIST_FOREACH(r, &info->config->repos, entries) {
+			size_t repo_uri_len = strlen(r->uri);
+			
+			// found a match
+			if(strncmp(r->uri, document_uri, repo_uri_len) == 0) {
+				end_point = document_uri + repo_uri_len;
+				repo = r;
 				break;
 			}
 		}
 		
-		git_lfs_server_handle_request(&options, &io, base_url, repo_tag, request_method, end_point);
-	done:
+		if(repo) {
+			git_lfs_server_handle_request(info->config, repo, &io, request_method, end_point);
+		} else {
+			git_lfs_write_error(&io, 404, "No repositories found on path.");
+		}
+
 		FCGX_Finish_r(&request);
 	}
 	
@@ -185,32 +148,19 @@ static void *handle_request(void *data)
 
 int main(int argc, char *argv[])
 {
-    char socket_path[PATH_MAX] = ":8080";
+	int verbose = 0;
     int max_connections = 400;
-	char chroot_path[PATH_MAX] = "";
-	char chroot_user[32] = "nobody";
-	char chroot_group[32] = "nobody";
+	char config_path[4096] = "/etc/git-lfs-server/git-lfs.conf";
 
 	static struct option long_options[] =
 	{
 		{ "help", no_argument, 0, 0 },
 		{ "verbose", no_argument, 0, 'v' },
-		{ "port", required_argument, 0, 'p' },
-		{ "object-dir", required_argument, 0, 0 },
-		{ "socket", required_argument, 0, 0 },
-		{ "chroot", required_argument, 0, 0 },
-		{ "chroot-user", required_argument, 0, 0 },
-		{ "chroot-group", required_argument, 0, 0 },
-		{ "threads", required_argument, 0, 0 },
+		{ "config", required_argument, 0, 'f' },
 		{ 0, 0, 0, 0 }
 	};
 	
 	accept_mutex = os_mutex_create();
-	
-	memset(&options, 0, sizeof(options));
-	strlcpy(options.object_path, ".", sizeof(options.object_path));
-	options.port = 8080;
-	options.num_threads = 5;
 	
 	int opt_index;
 	int c;
@@ -218,117 +168,47 @@ int main(int argc, char *argv[])
 	{
 		switch(c) {
 			case 'v':
-				options.verbose++;
+				verbose++;
 				break;
-			case 'p':
-			{
-				int port = strtol(optarg, NULL, 10);
-				if(port < 1024 || port > 65535)
+			case 'f':
+				if(strlcpy(config_path, optarg, sizeof(config_path)) >= sizeof(config_path))
 				{
-					fprintf(stderr, "Invalid port number.\n");
+					fprintf(stderr, "Invalid config path. Too long.\n");
 					return -1;
 				}
-				snprintf(socket_path, sizeof(socket_path), ":%d", port);
 				break;
-			}
-			default:
-				switch(opt_index) {
-					default:
-					case 0: /* help */
-						printf("usage: gif-lfs-server [options...]\n");
-						printf("options:\n");
-						printf("     --help                Display this help.\n");
-						printf(" -v, --verbose             Be verbose, can be specified more than once.\n");
-						printf("     --base-url=URL        Base URL to the server (i.e. http://localhost:8080)\n");
-						printf(" -p, --port=PORT           Port to listen (default: 8080)\n");
-						printf("     --object-dir=PATH     Path to a directory where to store the objects (default: current directory)\n");
-						printf("     --socket=PATH         Path to socket (overrides port).\n");
-						printf("     --chroot=PATH         Path to chroot (root only).\n");
-						printf("     --chroot-user=USER    Username for chroot (default: nobody).\n");
-						printf("     --chroot-group=GROUP  Group for chroot (default: nobody).\n");
-						printf("     --threads=N           Number of threads to spawn.");
-						return -1;
-						break;
-					case 3: /* object-dir */
-					{
-						if(strlcpy(options.object_path, optarg, sizeof(options.object_path)) >= sizeof(options.object_path))
-						{
-							fprintf(stderr, "Invalid object path. Too long.\n");
-							return -1;
-						}
-						break;
-					}
-					case 4: /* socket */
-					{
-						if(strlcpy(socket_path, optarg, sizeof(socket_path)) >= sizeof(socket_path))
-						{
-							fprintf(stderr, "Invalid socket path. Too long.\n");
-							return -1;
-						}
-					}
-						break;
-					case 5: /* chroot */
-						if(strlcpy(chroot_path, optarg, sizeof(chroot_path)) >= sizeof(chroot_path))
-						{
-							fprintf(stderr, "Invalid chroot path. Too long.\n");
-							return -1;
-						}
-						break;
-					case 6: /* chroot-user */
-						if(strlcpy(chroot_user, optarg, sizeof(chroot_user)) >= sizeof(chroot_user))
-						{
-							fprintf(stderr, "Invalid user name. Too long.\n");
-							return -1;
-						}
-						break;
-					case 7: /* chroot-group */
-						if(strlcpy(chroot_group, optarg, sizeof(chroot_group)) >= sizeof(chroot_group))
-						{
-							fprintf(stderr, "Invalid group name. Too long.\n");
-							return -1;
-						}
-						break;
-					case 8: /* threads */
-						{
-							options.num_threads = atol(optarg);
-							if(options.num_threads < 1 || options.num_threads > 256) {
-								fprintf(stderr, "Number of threads must be between 1-256.\n");
-								return -1;
-							}
-						}
-						break;
-				}
 		}
 	}
 	
-	if(chroot_path[0] != 0)
+	struct git_lfs_config *config = git_lfs_load_config(config_path);
+
+	if(config->chroot_path)
 	{
-		if(os_droproot(chroot_path, chroot_user, chroot_group) < 0)
+		if(!config->chroot_user || !config->chroot_group)
+		{
+			fprintf(stderr, "chroot_user and chroot_group must be specified when using chroot_path.\n");
+			return -1;
+		}
+		
+		if(os_droproot(config->chroot_path, config->chroot_user, config->chroot_group) < 0)
 		{
 			fprintf(stderr, "Failed to chroot and set user/group name.\n");
 			return -1;
 		}
 	}
-	
-	if(!os_is_directory(options.object_path))
-	{
-		fprintf(stderr, "%s: Path is not a valid directory.\n", options.object_path);
-		return -1;
-	}
 
-	if(options.verbose) {
-		printf("Objects Path: %s\n", options.object_path);
-		printf("Socket Path: %s\n", socket_path);
-		if(chroot_path[0]) {
-			printf("Chroot: %s\n", chroot_path);
-			printf("User: %s\n", chroot_user);
-			printf("Group: %s\n", chroot_group);
+	if(verbose) {
+		printf("Socket Path: %s\n", config->socket);
+		if(config->chroot_path) {
+			printf("Chroot: %s\n", config->chroot_path);
+			printf("User: %s\n", config->chroot_user);
+			printf("Group: %s\n", config->chroot_group);
 		}
 	}
 
 	FCGX_Init();
 
-    int listening_socket = FCGX_OpenSocket(socket_path, max_connections);
+    int listening_socket = FCGX_OpenSocket(config->socket, max_connections);
 	if(listening_socket < 0) {
 		fprintf(stderr, "Failed to create socket.");
 		exit(1);
@@ -352,17 +232,25 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-	struct thread_info *thread_infos = (struct thread_info *)malloc(sizeof(struct thread_info) * options.num_threads);
+	if(config->num_threads < 1 || config->num_threads > 256) {
+		fprintf(stderr, "Invalid number of threads (%d) specified.\n", config->num_threads);
+		return -1;
+	}
 
-	for(int i = 1; i < options.num_threads; i++) {
+	struct thread_info *thread_infos = (struct thread_info *)calloc(config->num_threads, sizeof(struct thread_info));
+
+	for(int i = 1; i < config->num_threads; i++) {
+		thread_infos[i].config = config;
 		thread_infos[i].listening_socket = listening_socket;
 		os_thread_create(handle_request, &thread_infos[i]);
 	}
 
+	thread_infos[0].config = config;
 	thread_infos[0].listening_socket = listening_socket;
 	handle_request(&thread_infos[0]);
 
 	free(thread_infos);
+	git_lfs_free_config(config);
 
 	return 0;
 }
