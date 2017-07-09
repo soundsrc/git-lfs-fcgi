@@ -53,7 +53,7 @@ void git_lfs_free_config(struct git_lfs_config *config)
 {
 	free(config->base_url);
 	free(config->socket);
-	free(config->chroot);
+	free(config->chroot_path);
 	free(config->chroot_user);
 	free(config->chroot_group);
 

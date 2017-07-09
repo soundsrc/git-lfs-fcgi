@@ -20,7 +20,7 @@ uri { return URI; }
 
 chroot_user { return CHROOT_USER; }
 chroot_group { return CHROOT_GROUP; }
-chroot { return CHROOT; }
+chroot_path { return CHROOT_PATH; }
 
 socket { return SOCKET; }
 

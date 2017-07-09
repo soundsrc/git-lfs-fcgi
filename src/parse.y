@@ -23,7 +23,7 @@ void parse_init(const char *filename, struct git_lfs_config *config)
 %token ROOT
 %token URI
 %token NUM_THREADS
-%token CHROOT
+%token CHROOT_PATH
 %token CHROOT_USER
 %token CHROOT_GROUP
 %token SOCKET
@@ -47,8 +47,8 @@ global_declaration
 	: BASE_URL STRING {
 		parse_config->base_url = strndup($2, sizeof($2));
 	}
-	| CHROOT STRING {
-		parse_config->chroot = strndup($2, sizeof($2));	
+	| CHROOT_PATH STRING {
+		parse_config->chroot_path = strndup($2, sizeof($2));	
 	}
 	| CHROOT_USER STRING {
 		parse_config->chroot_user = strndup($2, sizeof($2));	
