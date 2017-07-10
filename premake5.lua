@@ -89,7 +89,7 @@ solution "git-lfs-server"
 			}
 		end
 		excludes {
-			"src/standalone_main.c"
+			"src/standalone_main.c",
 			"src/y.tab.h",
 			"src/y.tab.c",
 			"src/lex.yy.c"
