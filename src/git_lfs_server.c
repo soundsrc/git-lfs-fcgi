@@ -20,6 +20,7 @@
 #include <stdarg.h>
 #include <time.h>
 #include <errno.h>
+#include "sha256.h"
 #include "json.h"
 #include "compat/string.h"
 #include "os/filesystem.h"
@@ -417,6 +418,18 @@ static void git_lfs_download(const struct git_lfs_config *config, const struct g
 	fclose(fp);
 }
 
+static unsigned char hex_to_int(char hex)
+{
+	if(hex >= 'a' && hex <= 'f') {
+		return 10 + hex - 'a';
+	} else if(hex >= 'A' && hex <= 'F') {
+		return 10 + hex - 'A';
+	} else if(hex >= '0' && hex <= '9') {
+		return hex - '0';
+	}
+	return 0;
+}
+
 static void git_lfs_upload(const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *access_token)
 {
 	char buffer[4096];
@@ -468,7 +481,29 @@ static void git_lfs_upload(const struct git_lfs_config *config, const struct git
 
 	fclose(fp);
 
-	// TODO: verify written data
+	if(config->verify_upload) {
+		fp = fopen(tmp_object_path, "rb");
+		if(fp) {
+			SHA256_CTX ctx;
+			SHA256_Init(&ctx);
+			while((n = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+				SHA256_Update(&ctx, buffer, n);
+			}
+			fclose(fp);
+			unsigned char sha256[SHA256_DIGEST_LENGTH];
+			unsigned char oid_hash[SHA256_DIGEST_LENGTH];
+			SHA256_Final(sha256, &ctx);
+			
+			for(int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+				oid_hash[i] = (hex_to_int(oid[i << 1]) << 4) | hex_to_int(oid[(i << 1) + 1]);
+			}
+			
+			if(memcmp(oid_hash, sha256, SHA256_DIGEST_LENGTH) != 0) {
+				git_lfs_write_error(400, "SHA256 written does not match the object SHA256: %s.", oid);
+				return;
+			}
+		}
+	}
 
 	os_rename(tmp_object_path, object_path);
 

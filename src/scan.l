@@ -17,7 +17,9 @@ repo { return REPO; }
 num_threads { return NUM_THREADS; }
 root { return ROOT; }
 uri { return URI; }
-
+verify_upload { return VERIFY_UPLOAD; }
+yes { return YES; }
+no { return NO; }
 chroot_user { return CHROOT_USER; }
 chroot_group { return CHROOT_GROUP; }
 chroot_path { return CHROOT_PATH; }

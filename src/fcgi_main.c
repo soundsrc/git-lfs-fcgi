@@ -181,6 +181,7 @@ int main(int argc, char *argv[])
 	}
 	
 	struct git_lfs_config *config = git_lfs_load_config(config_path);
+	config->verbose = verbose;
 
 	if(config->chroot_path)
 	{

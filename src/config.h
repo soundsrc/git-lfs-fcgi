@@ -37,6 +37,7 @@ SLIST_HEAD(git_lfs_repo_list, git_lfs_repo);
 struct git_lfs_config
 {
 	int verbose;
+	int verify_upload;
 
 	char *base_url; // eg. http://example.com
 	char *socket; // socket path or :port

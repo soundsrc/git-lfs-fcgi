@@ -22,6 +22,9 @@ void parse_init(const char *filename, struct git_lfs_config *config)
 %token REPO
 %token ROOT
 %token URI
+%token VERIFY_UPLOAD
+%token YES
+%token NO
 %token NUM_THREADS
 %token CHROOT_PATH
 %token CHROOT_USER
@@ -61,6 +64,12 @@ global_declaration
 	}
 	| SOCKET STRING {
 		parse_config->socket = strndup($2, sizeof($2));	
+	}
+	| VERIFY_UPLOAD YES {
+		parse_config->verify_upload = 1;
+	}
+	| VERIFY_UPLOAD NO {
+		parse_config->verify_upload = 0;
 	}
 	| INCLUDE STRING
 	;
