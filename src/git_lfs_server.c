@@ -256,10 +256,10 @@ static void git_lfs_server_handle_batch(const struct git_lfs_config *config, con
 			goto error1;
 		}
 		
-		struct json_object *out = json_object_new_object();
-		json_object_object_add(out, "oid", json_object_get(oid));
-		json_object_object_add(out, "size", json_object_get(size));
-		json_object_object_add(out, "authenticated", json_object_new_boolean(1));
+		struct json_object *obj_info = json_object_new_object();
+		json_object_object_add(obj_info, "oid", json_object_get(oid));
+		json_object_object_add(obj_info, "size", json_object_get(size));
+		json_object_object_add(obj_info, "authenticated", json_object_new_boolean(1));
 		struct json_object *actions = json_object_new_object();
 		
 		const char *oid_str = json_object_get_string(oid);
@@ -277,64 +277,81 @@ static void git_lfs_server_handle_batch(const struct git_lfs_config *config, con
 		char expire_time[32];
 		strftime(expire_time, sizeof(expire_time), "%FT%TZ", gmtime(&access_token->expire));
 		
+		char object_path[PATH_MAX];
+		if(snprintf(object_path, sizeof(object_path), "%s/%.2s/%s", repo->root_dir, oid_str, oid_str) >= sizeof(object_path)) {
+			git_lfs_write_error(io, 400, "Object path is too long.");
+			goto error1;
+		}
+		
 		switch(op) {
 			case git_lfs_operation_upload:
 			{
-				char url[1024];
+				if(!os_file_exists(object_path)) // only add upload entry if file doesn't exist
+				{
+					char url[1024];
 
-				// add upload url
-				if(snprintf(url, sizeof(url), "%s/%s/upload/%s", config->base_url, repo->uri, access_token->token) >= (long)sizeof(url)) {
-					git_lfs_write_error(io, 400, "Upload URL is too long.");
-					json_object_put(actions);
-					json_object_put(out);
-					goto error1;
-				}
+					// add upload url
+					if(snprintf(url, sizeof(url), "%s/%s/upload/%s", config->base_url, repo->uri, access_token->token) >= (long)sizeof(url)) {
+						git_lfs_write_error(io, 400, "Upload URL is too long.");
+						json_object_put(actions);
+						json_object_put(obj_info);
+						goto error1;
+					}
 
-				struct json_object *upload = json_object_new_object();
-				json_object_object_add(upload, "href", json_object_new_string(url));
-				json_object_object_add(upload, "expires_at", json_object_new_string(expire_time));
-				json_object_object_add(actions, "upload", upload);
-				
-				// add verify url
-				if(snprintf(url, sizeof(url), "%s/%s/verify/%s", config->base_url, repo->uri, access_token->token) >= (long)sizeof(url)) {
-					git_lfs_write_error(io, 400, "Upload URL is too long.");
-					json_object_put(actions);
-					json_object_put(out);
-					goto error1;
+					struct json_object *upload = json_object_new_object();
+					json_object_object_add(upload, "href", json_object_new_string(url));
+					json_object_object_add(upload, "expires_at", json_object_new_string(expire_time));
+					json_object_object_add(actions, "upload", upload);
+					
+					// add verify url
+					if(snprintf(url, sizeof(url), "%s/%s/verify/%s", config->base_url, repo->uri, access_token->token) >= (long)sizeof(url)) {
+						git_lfs_write_error(io, 400, "Upload URL is too long.");
+						json_object_put(actions);
+						json_object_put(obj_info);
+						goto error1;
+					}
+					
+					struct json_object *verify = json_object_new_object();
+					json_object_object_add(verify, "href", json_object_new_string(url));
+					json_object_object_add(verify, "expires_at", json_object_new_string(expire_time));
+					json_object_object_add(actions, "verify", verify);
+					json_object_object_add(obj_info, "actions", actions);
 				}
-				
-				struct json_object *verify = json_object_new_object();
-				json_object_object_add(verify, "href", json_object_new_string(url));
-				json_object_object_add(verify, "expires_at", json_object_new_string(expire_time));
-				json_object_object_add(actions, "verify", verify);
 
 				break;
 			}
 			
 			case git_lfs_operation_download:
 			{
-				char download_url[1024];
-				
-				if(snprintf(download_url, sizeof(download_url), "%s/%s/download/%s", config->base_url, repo->uri, access_token->token) >= (long)sizeof(download_url)) {
-					git_lfs_write_error(io, 400, "Download URL is too long.");
-					json_object_put(actions);
-					json_object_put(out);
-					goto error1;
+				if(!os_file_exists(object_path)) {
+					struct json_object *error = json_object_new_object();
+					json_object_object_add(error, "code", json_object_new_int(404));
+					json_object_object_add(error, "message", json_object_new_string("Object does not exist"));
+					json_object_object_add(obj_info, "error", error);
+				} else {
+					char download_url[1024];
+					
+					if(snprintf(download_url, sizeof(download_url), "%s/%s/download/%s", config->base_url, repo->uri, access_token->token) >= (long)sizeof(download_url)) {
+						git_lfs_write_error(io, 400, "Download URL is too long.");
+						json_object_put(actions);
+						json_object_put(obj_info);
+						goto error1;
+					}
+					
+					struct json_object *download = json_object_new_object();
+					json_object_object_add(download, "href", json_object_new_string(download_url));
+					json_object_object_add(download, "expires_at", json_object_new_string(expire_time));
+					json_object_object_add(actions, "download", download);
+					json_object_object_add(obj_info, "actions", actions);
 				}
-				
-				struct json_object *download = json_object_new_object();
-				json_object_object_add(download, "href", json_object_new_string(download_url));
-				json_object_object_add(download, "expires_at", json_object_new_string(expire_time));
-				json_object_object_add(actions, "download", download);
 				break;
 			}
 			
 			default:
 				break;
 		}
-		
-		json_object_object_add(out, "actions", actions);
-		json_object_array_add(output_objects, out);
+
+		json_object_array_add(output_objects, obj_info);
 	}
 
 	json_object_object_add(response_object, "objects", json_object_get(output_objects));
