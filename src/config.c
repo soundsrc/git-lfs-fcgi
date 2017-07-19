@@ -30,7 +30,7 @@ struct git_lfs_config *git_lfs_load_config(const char *path)
 {
 	yyin = fopen(path, "r");
 	if(!yyin) {
-		fprintf(stderr, "%s: Failed to open file.", path);
+		fprintf(stderr, "%s: Failed to open file.\n", path);
 		return NULL;
 	}
 	
