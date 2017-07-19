@@ -164,7 +164,7 @@ int main(int argc, char *argv[])
 	
 	int opt_index;
 	int c;
-	while((c = getopt_long (argc, argv, "vp:", long_options, &opt_index)) >= 0)
+	while((c = getopt_long (argc, argv, "vf:", long_options, &opt_index)) >= 0)
 	{
 		switch(c) {
 			case 'v':
