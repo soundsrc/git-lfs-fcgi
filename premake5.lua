@@ -82,6 +82,12 @@ solution "git-lfs-server"
 			"os/unix/*.c"
 		}
 
+		if os.is("macosx") then
+			files {
+				"os/macosx/*.c"
+			}
+		end
+
 		if not os.is("bsd") and not os.is("macosx") then
 			files { 
 				"compat/*.cpp", 
