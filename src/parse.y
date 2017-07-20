@@ -20,6 +20,7 @@ void parse_init(const char *filename, struct git_lfs_config *config)
 
 %token BASE_URL
 %token REPO
+%token PORT
 %token ROOT
 %token URI
 %token VERIFY_UPLOAD
@@ -58,6 +59,9 @@ global_declaration
 	}
 	| CHROOT_GROUP STRING {
 		parse_config->chroot_group = strndup($2, sizeof($2));	
+	}
+	| PORT INTEGER {
+		parse_config->port = $2;
 	}
 	| NUM_THREADS INTEGER {
 		parse_config->num_threads = $2;

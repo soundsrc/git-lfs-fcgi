@@ -15,6 +15,7 @@ static void scan_init()
 base_url { return BASE_URL; }
 repo { return REPO; }
 num_threads { return NUM_THREADS; }
+port { return PORT; }
 root { return ROOT; }
 uri { return URI; }
 verify_upload { return VERIFY_UPLOAD; }

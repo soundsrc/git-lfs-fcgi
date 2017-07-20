@@ -38,6 +38,8 @@ struct git_lfs_config
 {
 	int verbose;
 	int verify_upload;
+	
+	int port;
 
 	char *base_url; // eg. http://example.com
 	char *socket; // socket path or :port
