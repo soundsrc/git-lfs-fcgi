@@ -15,21 +15,14 @@
  */
 #include "repo_manager.h"
 #include <stdio.h>
-#include "os/sandbox.h"
 #include "os/io.h"
 
 int git_lfs_repo_manager_service(int socket)
 {
-	// allow file-io
-	if(os_sandbox(SANDBOX_FILEIO) < 0) {
-		fprintf(stderr, "Sandbox fail.\n");
-		return -1;
-	}
-	
 	for(;;) {
 		char dummy;
 		if(os_read(socket, &dummy, 1) < 0) {
-			break;
+//			break;
 		}
 	}
 	

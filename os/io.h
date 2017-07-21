@@ -17,6 +17,7 @@
 #ifndef OS_IO_H
 #define OS_IO_H
 
+int os_socketpair(int pair[2]);
 int os_open_read(const char *filename);
 int os_open_create(const char *filename, int mode);
 int os_read(int fd, void *buffer, int size);

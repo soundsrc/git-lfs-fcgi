@@ -24,7 +24,9 @@
 #include "os/mutex.h"
 #include "os/threads.h"
 #include "os/droproot.h"
+#include "os/io.h"
 #include "os/process.h"
+#include "os/sandbox.h"
 #include "config.h"
 #include "socket_io.h"
 #include "httpd.h"
@@ -95,18 +97,46 @@ int main(int argc, char *argv[])
 		}
 	}
 	
+	int fd[2];
+	if(os_socketpair(fd) < 0) {
+		fprintf(stderr, "Failed to create sockets.\n");
+		goto error1;
+	}
+	
 	int pid = os_fork();
 	if(pid < 0) {
 		fprintf(stderr, "Failed to fork process.\n");
+		os_close(fd[1]);
+		os_close(fd[0]);
 		goto error1;
 	}
 	
 	if(pid == 0) {
-		git_lfs_repo_manager_service(0);
+		if(os_sandbox(SANDBOX_FILEIO) < 0) {
+			fprintf(stderr, "Sandbox failed.\n");
+			goto error1;
+		}
+
+		os_close(fd[0]);
+		git_lfs_repo_manager_service(fd[1]);
+		os_close(fd[1]);
 	} else {
-		git_lfs_start_httpd(config);
-	}
 		
+		// todo, allow configurable
+		if(os_chroot("/var/empty") < 0) {
+			fprintf(stderr, "warning: Chroot failed.\n");
+		}
+
+		// only allow internet
+		if(os_sandbox(SANDBOX_INET_SOCKET) < 0) {
+			fprintf(stderr, "Sandbox failed.\n");
+			goto error1;
+		}
+
+		os_close(fd[1]);
+		git_lfs_start_httpd(config);
+		os_close(fd[0]);
+	}
 error1:
 	git_lfs_free_config(config);
 error0:

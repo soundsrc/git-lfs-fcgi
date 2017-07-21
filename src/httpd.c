@@ -119,14 +119,6 @@ static int handle_request(struct mg_connection *conn)
 
 int git_lfs_start_httpd(const struct git_lfs_config *config)
 {
-	//chroot("/var/empty")
-	
-	// only allow internet
-	if(os_sandbox(SANDBOX_INET_SOCKET) < 0) {
-		fprintf(stderr, "Sandbox failed.\n");
-		return -1;
-	}
-	
 	running_mutex = os_mutex_create();
 
 	char port_string[16];

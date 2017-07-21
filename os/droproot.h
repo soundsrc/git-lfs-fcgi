@@ -13,8 +13,8 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#ifndef OS_PROCESS_H
-#define OS_PROCESS_H
+#ifndef OS_DROPROOT_H
+#define OS_DROPROOT_H
 
 int os_droproot(const char *chroot_path, const char *user, const char *group);
 

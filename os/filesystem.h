@@ -21,5 +21,6 @@ int os_file_exists(const char *path);
 long os_file_size(const char *path);
 int os_mkdir(const char *path, int mode);
 int os_rename(const char *src_path, const char *dest_path);
+int os_chroot(const char *path);
 
 #endif
