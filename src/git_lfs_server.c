@@ -23,12 +23,58 @@
 #include "sha256.h"
 #include "json.h"
 #include "compat/string.h"
+#include "compat/queue.h"
 #include "os/filesystem.h"
 #include "os/mutex.h"
 #include "config.h"
 #include "socket_io.h"
 #include "mkdir_recusive.h"
 #include "git_lfs_server.h"
+
+
+// access token lets one access files of the reps
+struct git_lfs_access_token
+{
+	LIST_ENTRY(git_lfs_access_token) entries;
+
+	char token[16];
+	time_t expire;
+	const struct git_lfs_repo *repo;
+};
+
+static LIST_HEAD(git_lfs_access_token_list, git_lfs_access_token) access_token_list;
+
+static struct git_lfs_access_token *git_lfs_add_access_token(const struct git_lfs_repo *repo, time_t expires_at)
+{
+	static const char ch[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+	struct git_lfs_access_token *access_token = calloc(1, sizeof *access_token);
+	access_token->expire = expires_at;
+	access_token->repo = repo;
+	
+	for(int i = 0; i < sizeof(access_token->token) - 1; ++i)
+	{
+		access_token->token[i] = ch[rand() % (sizeof(ch) - 1)];
+	}
+	access_token->token[sizeof(access_token->token) - 1] = 0;
+	
+	LIST_INSERT_HEAD(&access_token_list, access_token, entries);
+
+	return access_token;
+}
+
+static void git_lfs_cleanup_access_tokens()
+{
+	struct git_lfs_access_token *access_token, *tmp;
+	time_t now = time(NULL);
+	LIST_FOREACH_SAFE(access_token, &access_token_list, entries, tmp)
+	{
+		if(access_token->expire > now) {
+			LIST_REMOVE(access_token, entries);
+			free(access_token);
+		}
+	}
+}
 
 typedef enum git_lfs_operation_type
 {
@@ -142,6 +188,9 @@ static void git_lfs_server_handle_batch(const struct git_lfs_config *config, con
 		goto error0;
 	}
 	
+	git_lfs_cleanup_access_tokens();
+	struct git_lfs_access_token *access_token = git_lfs_add_access_token(repo, time(NULL) + 600);
+	
 	struct json_object *response_object = json_object_new_object();
 	struct json_object *output_objects = json_object_new_array();
 	
@@ -176,8 +225,8 @@ static void git_lfs_server_handle_batch(const struct git_lfs_config *config, con
 			goto error1;
 		}
 
-		//char expire_time[32];
-		//strftime(expire_time, sizeof(expire_time), "%FT%TZ", gmtime(&access_token->expire));
+		char expire_time[32];
+		strftime(expire_time, sizeof(expire_time), "%FT%TZ", gmtime(&access_token->expire));
 		
 		char object_path[PATH_MAX];
 		if(snprintf(object_path, sizeof(object_path), "%s/%.2s/%s", repo->root_dir, oid_str, oid_str) >= sizeof(object_path)) {
@@ -202,7 +251,12 @@ static void git_lfs_server_handle_batch(const struct git_lfs_config *config, con
 
 					struct json_object *upload = json_object_new_object();
 					json_object_object_add(upload, "href", json_object_new_string(url));
-					//json_object_object_add(upload, "expires_at", json_object_new_string(expire_time));
+					
+					struct json_object *header = json_object_new_object();
+					json_object_object_add(header, "Access-Token", json_object_new_string(access_token->token));
+					json_object_object_add(upload, "header", header);
+
+					json_object_object_add(upload, "expires_at", json_object_new_string(expire_time));
 					json_object_object_add(actions, "upload", upload);
 					
 					// add verify url
@@ -215,7 +269,12 @@ static void git_lfs_server_handle_batch(const struct git_lfs_config *config, con
 					
 					struct json_object *verify = json_object_new_object();
 					json_object_object_add(verify, "href", json_object_new_string(url));
-					//json_object_object_add(verify, "expires_at", json_object_new_string(expire_time));
+					
+					header = json_object_new_object();
+					json_object_object_add(header, "Access-Token", json_object_new_string(access_token->token));
+					json_object_object_add(verify, "header", header);
+					
+					json_object_object_add(verify, "expires_at", json_object_new_string(expire_time));
 					json_object_object_add(actions, "verify", verify);
 					json_object_object_add(obj_info, "actions", actions);
 				}
@@ -242,7 +301,12 @@ static void git_lfs_server_handle_batch(const struct git_lfs_config *config, con
 					
 					struct json_object *download = json_object_new_object();
 					json_object_object_add(download, "href", json_object_new_string(download_url));
-					//json_object_object_add(download, "expires_at", json_object_new_string(expire_time));
+					
+					struct json_object *header = json_object_new_object();
+					json_object_object_add(header, "Access-Token", json_object_new_string(access_token->token));
+					json_object_object_add(download, "header", header);
+					
+					json_object_object_add(download, "expires_at", json_object_new_string(expire_time));
 					json_object_object_add(actions, "download", download);
 					json_object_object_add(obj_info, "actions", actions);
 				}
