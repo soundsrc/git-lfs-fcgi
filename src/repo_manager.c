@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 Sound <sound@sagaforce.com>
+ * Copyright (c) 2017 Sound <sound@sagaforce.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,16 +13,25 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#ifndef GIT_LFS_SERVER_H
-#define GIT_LFS_SERVER_H
+#include "repo_manager.h"
+#include <stdio.h>
+#include "os/sandbox.h"
+#include "os/io.h"
 
-struct socket_io;
-struct options;
-struct git_lfs_config;
-struct git_lfs_repo;
-
-void git_lfs_init();
-void git_lfs_server_handle_request(const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *method, const char *end_point);
-void git_lfs_write_error(const struct socket_io *io, int error_code, const char *format, ...);
-
-#endif
+int git_lfs_repo_manager_service(int socket)
+{
+	// allow file-io
+	if(os_sandbox(SANDBOX_FILEIO) < 0) {
+		fprintf(stderr, "Sandbox fail.\n");
+		return -1;
+	}
+	
+	for(;;) {
+		char dummy;
+		if(os_read(socket, &dummy, 1) < 0) {
+			break;
+		}
+	}
+	
+	return 0;
+}

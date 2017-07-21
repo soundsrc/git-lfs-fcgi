@@ -13,16 +13,10 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#ifndef GIT_LFS_SERVER_H
-#define GIT_LFS_SERVER_H
+#ifndef HTTPD_H
+#define HTTPD_H
 
-struct socket_io;
-struct options;
 struct git_lfs_config;
-struct git_lfs_repo;
-
-void git_lfs_init();
-void git_lfs_server_handle_request(const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *method, const char *end_point);
-void git_lfs_write_error(const struct socket_io *io, int error_code, const char *format, ...);
+int git_lfs_start_httpd(const struct git_lfs_config *config);
 
 #endif

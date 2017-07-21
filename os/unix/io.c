@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 Sound <sound@sagaforce.com>
+ * Copyright (c) 2017 Sound <sound@sagaforce.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,16 +13,32 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#ifndef GIT_LFS_SERVER_H
-#define GIT_LFS_SERVER_H
+#include "io.h"
+#include <unistd.h>
+#include <fcntl.h>
 
-struct socket_io;
-struct options;
-struct git_lfs_config;
-struct git_lfs_repo;
+int os_open_read(const char *filename)
+{
+	return open(filename, O_RDONLY);
+}
 
-void git_lfs_init();
-void git_lfs_server_handle_request(const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *method, const char *end_point);
-void git_lfs_write_error(const struct socket_io *io, int error_code, const char *format, ...);
+int os_open_create(const char *filename, int mode)
+{
+	return open(filename, O_CREAT | O_WRONLY, mode);
+}
 
-#endif
+int os_read(int fd, void *buffer, int size)
+{
+	return read(fd, buffer, size);
+}
+
+int os_write(int fd, const void *buffer, int size)
+{
+	return write(fd, buffer, size);
+}
+
+int os_close(int fd)
+{
+	return close(fd);
+}
+

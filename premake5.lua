@@ -47,19 +47,7 @@ solution "git-lfs-server"
 			"external/json-c/random_seed.h"
 		}
 
-	project "libfcgi"
-		kind "StaticLib"
-		language "C"
-		includedirs {
-			"external/libfcgi/include",
-		}
-		files {
-			"external/libfcgi/libfcgi/fcgiapp.c",
-			"external/libfcgi/libfcgi/fcgi_stdio.c",
-			"external/libfcgi/libfcgi/os_unix.c",
-		}
-
-	project "git-lfs-server-fcgi"
+	project "git-lfs-server"
 		kind "ConsoleApp"
 		language "C"
 		buildoptions { "-std=c99" }
@@ -67,7 +55,6 @@ solution "git-lfs-server"
 			".",
 			"external/json-c",
 			"external/mongoose",
-			"external/libfcgi/include",
 			"/usr/local/include",
 		}
 		libdirs { "/usr/local/lib" }
@@ -100,4 +87,4 @@ solution "git-lfs-server"
 			"src/y.tab.c",
 			"src/lex.yy.c"
 		}
-		links { "mongoose", "json-c", "libfcgi", "pthread" }
+		links { "mongoose", "json-c", "pthread" }
