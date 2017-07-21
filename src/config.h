@@ -17,6 +17,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <stdint.h>
 #include "compat/queue.h"
 
 #ifndef PATH_MAX
@@ -27,6 +28,7 @@ struct git_lfs_repo
 {
 	SLIST_ENTRY(git_lfs_repo) entries;
 
+	uint32_t id; // unique repo id
 	char *name; // name of repo
 	char *uri; // uri
 	char *root_dir; // root directory for files

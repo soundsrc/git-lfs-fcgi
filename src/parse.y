@@ -1,9 +1,11 @@
 %{
 #include <stdlib.h>
+#include <stdint.h>
 
 static const char *parse_filename;
 static struct git_lfs_config *parse_config;
 static struct git_lfs_repo *parse_repo;
+static uint32_t s_next_id = 0;
 
 void parse_init(const char *filename, struct git_lfs_config *config)
 {
@@ -89,6 +91,7 @@ repo_declaration
 	: REPO STRING {
 		parse_repo = (struct git_lfs_repo *)calloc(1, sizeof(struct git_lfs_repo));
 		parse_repo->name = strndup($2, sizeof($2));
+		parse_repo->id = s_next_id++;
 	}
 	'{' repo_params_list '}' {
 		SLIST_INSERT_HEAD(&parse_config->repos, parse_repo, entries);
