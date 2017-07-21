@@ -15,6 +15,7 @@ static void scan_init()
 base_url { return BASE_URL; }
 repo { return REPO; }
 num_threads { return NUM_THREADS; }
+fastcgi_server { return FASTCGI_SERVER; }
 port { return PORT; }
 root { return ROOT; }
 uri { return URI; }
@@ -25,7 +26,7 @@ chroot_user { return CHROOT_USER; }
 chroot_group { return CHROOT_GROUP; }
 chroot_path { return CHROOT_PATH; }
 
-socket { return SOCKET; }
+fastcgi_socket { return FASTCGI_SOCKET; }
 
 include { return INCLUDE; }
 

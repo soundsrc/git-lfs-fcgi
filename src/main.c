@@ -89,7 +89,10 @@ int main(int argc, char *argv[])
 	}
 
 	if(verbose) {
-		printf("Socket Path: %s\n", config->socket);
+		if(config->fastcgi_server) {
+			printf("FastCGI enabled.\n");
+			printf("Socket Path: %s\n", config->fastcgi_socket);
+		}
 		if(config->chroot_path) {
 			printf("Chroot: %s\n", config->chroot_path);
 			printf("User: %s\n", config->chroot_user);

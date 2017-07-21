@@ -26,11 +26,12 @@ void parse_init(const char *filename, struct git_lfs_config *config)
 %token VERIFY_UPLOAD
 %token YES
 %token NO
+%token FASTCGI_SERVER
 %token NUM_THREADS
 %token CHROOT_PATH
 %token CHROOT_USER
 %token CHROOT_GROUP
-%token SOCKET
+%token FASTCGI_SOCKET
 %token <ival> INTEGER
 %token <sval> STRING
 %token INCLUDE
@@ -66,8 +67,14 @@ global_declaration
 	| NUM_THREADS INTEGER {
 		parse_config->num_threads = $2;
 	}
-	| SOCKET STRING {
-		parse_config->socket = strndup($2, sizeof($2));	
+	| FASTCGI_SERVER YES {
+		parse_config->fastcgi_server = 1;
+	}
+	| FASTCGI_SERVER NO {
+		parse_config->fastcgi_server = 0;
+	}
+	| FASTCGI_SOCKET STRING {
+		parse_config->fastcgi_socket = strndup($2, sizeof($2));	
 	}
 	| VERIFY_UPLOAD YES {
 		parse_config->verify_upload = 1;

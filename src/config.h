@@ -39,10 +39,13 @@ struct git_lfs_config
 	int verbose;
 	int verify_upload;
 	
-	int port;
-
+	int port; // listening port
+	
 	char *base_url; // eg. http://example.com
-	char *socket; // socket path or :port
+	
+	int fastcgi_server; // enable fastcgi server
+	char *fastcgi_socket; // socket path or :port for fastcgi
+
 	int num_threads;
 	
 	char *chroot_path;
