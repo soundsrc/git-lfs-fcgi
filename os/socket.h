@@ -13,14 +13,12 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#ifndef OS_SOCKET_H
+#define OS_SOCKET_H
 
-#ifndef OS_IO_H
-#define OS_IO_H
+int os_socketpair(int pair[2]);
 
-int os_open_read(const char *filename);
-int os_open_create(const char *filename, int mode);
-int os_read(int fd, void *buffer, int size);
-int os_write(int fd, const void *buffer, int size);
-int os_close(int fd);
+int os_send_with_file_descriptor(int socket, const void *buffer, int size, int fd);
+int os_recv_with_file_descriptor(int socket, void *buffer, int size, int *fd);
 
 #endif

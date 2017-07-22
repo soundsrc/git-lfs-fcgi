@@ -25,6 +25,7 @@
 #include "os/threads.h"
 #include "os/droproot.h"
 #include "os/io.h"
+#include "os/socket.h"
 #include "os/process.h"
 #include "os/sandbox.h"
 #include "config.h"

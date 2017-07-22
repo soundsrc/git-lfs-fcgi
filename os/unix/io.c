@@ -14,14 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 #include "io.h"
-#include <sys/socket.h>
 #include <unistd.h>
 #include <fcntl.h>
-
-int os_socketpair(int pair[2])
-{
-	return socketpair(AF_UNIX, SOCK_STREAM, 0, pair);
-}
 
 int os_open_read(const char *filename)
 {
