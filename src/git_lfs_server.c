@@ -28,6 +28,7 @@
 #include "os/mutex.h"
 #include "config.h"
 #include "socket_io.h"
+#include "oid_utils.h"
 #include "mkdir_recusive.h"
 #include "git_lfs_server.h"
 
@@ -82,22 +83,6 @@ typedef enum git_lfs_operation_type
 	git_lfs_operation_upload,
 	git_lfs_operation_download
 } git_lfs_operation;
-
-// oid's are hashes, only sha256 is defined
-static int is_valid_oid(const char *oid)
-{
-	if(strnlen(oid, 65) != 64) return 0;
-	
-	for(int i = 0; i < 64; i++) {
-		if(!((oid[i] >= '0' && oid[i] <= '9') ||
-		   (oid[i] >='a' && oid[i] <= 'f')))
-		{
-			return 0;
-		}
-	}
-	
-	return 1;
-}
 
 void git_lfs_write_error(const struct socket_io *io, int error_code, const char *format, ...)
 {
@@ -354,7 +339,7 @@ static void git_lfs_download(const struct git_lfs_config *config, const struct g
 	int n;
 	char object_path[PATH_MAX];
 
-	if(!is_valid_oid(oid)) {
+	if(!oid_is_valid(oid)) {
 		git_lfs_write_error(io, 400, "Object ID is not valid.");
 		return;
 	}
@@ -393,18 +378,6 @@ static void git_lfs_download(const struct git_lfs_config *config, const struct g
 	}
 	
 	fclose(fp);
-}
-
-static unsigned char hex_to_int(char hex)
-{
-	if(hex >= 'a' && hex <= 'f') {
-		return 10 + hex - 'a';
-	} else if(hex >= 'A' && hex <= 'F') {
-		return 10 + hex - 'A';
-	} else if(hex >= '0' && hex <= '9') {
-		return hex - '0';
-	}
-	return 0;
 }
 
 static void git_lfs_upload(const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *oid)
@@ -465,10 +438,11 @@ static void git_lfs_upload(const struct git_lfs_config *config, const struct git
 			unsigned char oid_hash[SHA256_DIGEST_LENGTH];
 			SHA256_Final(sha256, &ctx);
 			
-			for(int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
-				oid_hash[i] = (hex_to_int(oid[i << 1]) << 4) | hex_to_int(oid[(i << 1) + 1]);
+			if(oid_from_string(oid, oid_hash) < 0) {
+				git_lfs_write_error(400, "Invalid oid: %s.", oid);
+				return;
 			}
-			
+
 			if(memcmp(oid_hash, sha256, SHA256_DIGEST_LENGTH) != 0) {
 				git_lfs_write_error(400, "SHA256 written does not match the object SHA256: %s.", oid);
 				return;
@@ -511,7 +485,7 @@ static void git_lfs_verify(const struct git_lfs_config *config, const struct git
 	}
 	
 	const char *oid_string = json_object_get_string(oid);
-	if(!is_valid_oid(oid_string))
+	if(!oid_is_valid(oid_string))
 	{
 		git_lfs_write_error(io, 400, "Invalid oid passed to verify.");
 		goto error0;

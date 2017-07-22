@@ -60,7 +60,7 @@ void oid_to_string(unsigned char oid[32], char str[65])
 	str[64] = 0;
 }
 
-int oid_from_string(char str[65], unsigned char oid[32])
+int oid_from_string(const char str[65], unsigned char oid[32])
 {
 	if(!oid_is_valid(str)) return -1;
 	
