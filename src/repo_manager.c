@@ -158,7 +158,7 @@ int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config
 					char path[PATH_MAX];
 					char oid_str[65];
 					oid_to_string(data.oid, oid_str);
-					if(snprintf(path, sizeof(path), "%s/%s", repo->root_dir, oid_str) >= sizeof(path)) {
+					if(snprintf(path, sizeof(path), "%s/%.2s/%s", repo->root_dir, oid_str, oid_str) >= sizeof(path)) {
 						git_lfs_repo_send_response(socket, REPO_CMD_ERROR, hdr.cookie, NULL, 0, NULL);
 						continue;
 					}
