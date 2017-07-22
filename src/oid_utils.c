@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "oid_util.h"
+#include "oid_utils.h"
 #include <string.h>
 
 static unsigned char hex_to_int(char hex)
