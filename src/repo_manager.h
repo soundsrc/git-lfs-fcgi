@@ -59,13 +59,14 @@ struct repo_check_oid_response
 
 struct repo_oid_response
 {
+	long content_length;
 	int successful;
 };
 
 int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config);
 
 int git_lfs_repo_check_oid_exist(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const char *auth, unsigned char oid[32]);
-int git_lfs_repo_get_read_oid_fd(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const char *auth, unsigned char oid[32], int *fd);
+int git_lfs_repo_get_read_oid_fd(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const char *auth, unsigned char oid[32], int *fd, long *size);
 int git_lfs_repo_get_write_oid_fd(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const char *auth, unsigned char oid[32], int *fd);
 int git_lfs_repo_terminate_service(int socket);
 

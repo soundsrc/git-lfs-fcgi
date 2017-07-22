@@ -138,7 +138,7 @@ int main(int argc, char *argv[])
 		}
 
 		os_close(fd[1]);
-		git_lfs_start_httpd(config);
+		git_lfs_start_httpd(fd[0], config);
 		os_close(fd[0]);
 	}
 error1:

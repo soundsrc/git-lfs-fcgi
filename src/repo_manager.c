@@ -177,9 +177,14 @@ int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config
 						case REPO_CMD_GET_OID:
 						{
 							struct repo_oid_response resp;
+							memset(&resp, 0, sizeof(resp));
 							
 							int fd = os_open_read(path);
 							resp.successful = fd >= 0;
+							if(resp.successful) {
+								resp.content_length = os_file_size(path);
+							}
+
 							if(git_lfs_repo_send_response(socket, REPO_CMD_GET_OID, hdr.cookie, &resp, sizeof(resp), fd) != sizeof(resp)) {
 								continue;
 							}
@@ -189,6 +194,7 @@ int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config
 						case REPO_CMD_PUT_OID:
 						{
 							struct repo_oid_response resp;
+							memset(&resp, 0, sizeof(resp));
 							
 							int fd = os_open_create(path, 0600);
 							resp.successful = fd >= 0;
@@ -228,7 +234,7 @@ int git_lfs_repo_check_oid_exist(int socket, const struct git_lfs_config *config
 	return check_oid_resp.exist;
 }
 
-int git_lfs_repo_get_read_oid_fd(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const char *auth, unsigned char oid[32], int *fd)
+int git_lfs_repo_get_read_oid_fd(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const char *auth, unsigned char oid[32], int *fd, long *size)
 {
 	struct repo_oid_cmd_data get_oid_req;
 	get_oid_req.repo_id = repo->id;
@@ -242,6 +248,8 @@ int git_lfs_repo_get_read_oid_fd(int socket, const struct git_lfs_config *config
 								 fd) < 0) {
 		return -1;
 	}
+	
+	*size = get_oid_resp.content_length;
 	
 	return get_oid_resp.successful ? 0 : -1;
 }
