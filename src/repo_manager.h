@@ -19,36 +19,54 @@
 #include <stdint.h>
 
 struct git_lfs_config;
+struct git_lfs_repo;
 
 enum repo_cmd_type
 {
-	CHECK_OID_EXIST,
-	GET_OID,
-	PUT_OID,
-	TERMINATE
+	REPO_CMD_CHECK_OID_EXIST,
+	REPO_CMD_GET_OID,
+	REPO_CMD_PUT_OID,
+	REPO_CMD_TERMINATE,
+	REPO_CMD_ERROR
 };
 
-struct repo_cmd_base
+#define REPO_CMD_MAGIC 0xa733f97f
+
+struct repo_magic_cookie
 {
+	uint32_t magic;
+	uint32_t cookie;
+};
+
+struct repo_cmd_header
+{
+	uint32_t magic;
 	uint32_t cookie;
 	enum repo_cmd_type type;
 };
 
-struct repo_check_oid_cmd
+struct repo_oid_cmd_data
 {
+	int repo_id;
+	char auth[16];
 	uint8_t oid[32];
 };
 
-struct repo_check_oid_reponse
+struct repo_check_oid_response
 {
 	int exist;
 };
 
-int git_lfs_repo_manager_service(int socket);
+struct repo_oid_response
+{
+	int successful;
+};
 
-int git_lfs_repo_check_oid_exist(const struct git_lfs_config *config, const char *repo, const char *auth, unsigned char oid[32]);
-int git_lfs_repo_get_read_oid_fd(const struct git_lfs_config *config, const char *repo, const char *auth, unsigned char oid[32]);
-int git_lfs_repo_get_write_oid_fd(const struct git_lfs_config *config, const char *repo, const char *auth, unsigned char oid[32]);
-int git_lfs_repo_terminate_service();
+int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config);
+
+int git_lfs_repo_check_oid_exist(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const char *auth, unsigned char oid[32]);
+int git_lfs_repo_get_read_oid_fd(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const char *auth, unsigned char oid[32], int *fd);
+int git_lfs_repo_get_write_oid_fd(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const char *auth, unsigned char oid[32], int *fd);
+int git_lfs_repo_terminate_service(int socket);
 
 #endif /* repo_manager_h */

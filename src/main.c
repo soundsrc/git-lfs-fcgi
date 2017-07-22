@@ -122,7 +122,7 @@ int main(int argc, char *argv[])
 		}
 
 		os_close(fd[0]);
-		git_lfs_repo_manager_service(fd[1]);
+		git_lfs_repo_manager_service(fd[1], config);
 		os_close(fd[1]);
 	} else {
 		
