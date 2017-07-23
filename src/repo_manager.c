@@ -187,6 +187,20 @@ int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config
 							struct repo_oid_response resp;
 							memset(&resp, 0, sizeof(resp));
 							
+							const char *dir_end = strrchr(path, '/');
+							if(dir_end) {
+								char dir[PATH_MAX];
+								size_t len = dir_end - path;
+								if(len + 1 < PATH_MAX) {
+									memcpy(dir, path, len);
+									dir[len] = 0;
+								}
+								
+								if(!os_is_directory(dir)) {
+									os_mkdir(dir, 0700);
+								}
+							}
+							
 							int fd = os_open_create(path, 0600);
 							resp.successful = fd >= 0;
 							if(git_lfs_repo_send_response(socket, REPO_CMD_PUT_OID, hdr.cookie, &resp, sizeof(resp), fd) != sizeof(resp)) {
@@ -194,6 +208,36 @@ int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config
 							}
 							if(fd >= 0) os_close(fd);
 							break;
+						}
+						case REPO_CMD_VERIFY:
+						{
+#if 0
+							if(config->verify_upload) {
+								int fd = os_open_read("");
+								int n;
+								char buffer[4096];
+								if(fd > 0) {
+									SHA256_CTX ctx;
+									SHA256_Init(&ctx);
+									while((n = os_read(fd, buffer, sizeof(buffer))) > 0) {
+										SHA256_Update(&ctx, buffer, n);
+									}
+									os_close(fd);
+
+									unsigned char sha256[SHA256_DIGEST_LENGTH];
+									unsigned char oid_hash[SHA256_DIGEST_LENGTH];
+									SHA256_Final(sha256, &ctx);
+									
+									if(oid_from_string(oid, oid_hash) < 0) {
+										return -1;
+									}
+									
+									if(memcmp(oid_hash, sha256, SHA256_DIGEST_LENGTH) != 0) {
+										return -1;
+									}
+								}
+							}
+#endif
 						}
 					}
 				}
