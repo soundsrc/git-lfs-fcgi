@@ -65,7 +65,7 @@ int oid_from_string(const char str[65], unsigned char oid[32])
 	if(!oid_is_valid(str)) return -1;
 	
 	for(int i = 0; i < 32; i++) {
-		oid[i] = (hex_to_int(oid[i << 1]) << 4) | hex_to_int(oid[(i << 1) + 1]);
+		oid[i] = (hex_to_int(str[i << 1]) << 4) | hex_to_int(str[(i << 1) + 1]);
 	}
 	
 	return 0;
