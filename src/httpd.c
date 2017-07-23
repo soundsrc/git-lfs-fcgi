@@ -282,7 +282,7 @@ int git_lfs_start_httpd(int repo_socket, const struct git_lfs_config *config)
 		for(int i = 1; i < config->num_threads; i++) {
 			thread_infos[i].config = config;
 			thread_infos[i].listening_socket = listening_socket;
-			thread_infos[0].repo_socket = repo_socket;
+			thread_infos[i].repo_socket = repo_socket;
 			os_thread_create(fastcgi_handler_thread, &thread_infos[i]);
 		}
 		
