@@ -440,75 +440,22 @@ static void git_lfs_download(int socket, const struct git_lfs_config *config, co
 
 static void git_lfs_upload(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *oid)
 {
+	uint8_t oid_bytes[SHA256_DIGEST_LENGTH];
+	oid_from_string(oid, oid_bytes);
+	
+	int fd;
+	if(git_lfs_repo_get_write_oid_fd(socket, config, repo, "", oid_bytes, &fd) < 0) {
+		git_lfs_write_error(io, 400, "Unable to upload object.");
+		return;
+	}
+	
 	char buffer[4096];
 	int n;
-	char object_path[PATH_MAX], tmp_object_path[PATH_MAX];
-
-	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/", repo->root_dir, oid) >= (long)sizeof(object_path))
-	{
-		git_lfs_write_error(io, 400, "Object path is too long.");
-		return;
-	}
-
-	// object_path contains the upload directory
-	if(!os_file_exists(object_path))
-	{
-		mkdir_recursive(object_path, 0700);
-	}
-
-	// append the oid
-	if(strlcat(object_path, oid, sizeof(object_path)) >= sizeof(object_path))
-	{
-		git_lfs_write_error(io, 400, "Object path is too long.");
-		return;
-	}
-
-	if(strlcpy(tmp_object_path, object_path, sizeof(tmp_object_path)) >= sizeof(tmp_object_path) ||
-	   strlcat(tmp_object_path, "-tmp", sizeof(tmp_object_path)) >= sizeof(tmp_object_path))
-	{
-		git_lfs_write_error(io, 400, "Object path is too long.");
-		return;
-	}
-
-
-	FILE *fp = fopen(tmp_object_path, "wb");
-	if(!fp) {
-		git_lfs_write_error(io, 400, "Failed to write to storage.");
-		return;
-	}
-
 	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0) {
-		fwrite(buffer, 1, n, fp);
+		os_write(fd, buffer, n);
 	}
 
-	fclose(fp);
-
-	if(config->verify_upload) {
-		fp = fopen(tmp_object_path, "rb");
-		if(fp) {
-			SHA256_CTX ctx;
-			SHA256_Init(&ctx);
-			while((n = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
-				SHA256_Update(&ctx, buffer, n);
-			}
-			fclose(fp);
-			unsigned char sha256[SHA256_DIGEST_LENGTH];
-			unsigned char oid_hash[SHA256_DIGEST_LENGTH];
-			SHA256_Final(sha256, &ctx);
-			
-			if(oid_from_string(oid, oid_hash) < 0) {
-				git_lfs_write_error(400, "Invalid oid: %s.", oid);
-				return;
-			}
-
-			if(memcmp(oid_hash, sha256, SHA256_DIGEST_LENGTH) != 0) {
-				git_lfs_write_error(400, "SHA256 written does not match the object SHA256: %s.", oid);
-				return;
-			}
-		}
-	}
-
-	os_rename(tmp_object_path, object_path);
+	os_close(fd);
 
 	io->write_http_status(io->context, 200, "OK");
 	io->write_headers(io->context, NULL, 0);
