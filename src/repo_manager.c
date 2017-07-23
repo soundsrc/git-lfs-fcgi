@@ -145,7 +145,7 @@ int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config
 				case REPO_CMD_PUT_OID:
 				{
 					struct repo_oid_cmd_data data;
-					if(socket_read_fully(socket, &data, sizeof(data) != sizeof(data))) {
+					if(socket_read_fully(socket, &data, sizeof(data)) != sizeof(data)) {
 						return -1;
 					}
 					
