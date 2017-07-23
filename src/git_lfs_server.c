@@ -170,7 +170,37 @@ static void git_lfs_server_handle_batch(int socket, const struct git_lfs_config 
 		goto error0;
 	}
 	
-	
+	struct json_object *transfers;
+	if(json_object_object_get_ex(root, "transfers", &transfers)) {
+		int has_basic_transfer = 0;
+		
+		// transfers was specified
+		struct array_list * transfers_array = json_object_get_array(transfers);
+		if(!transfers_array) {
+			git_lfs_write_error(io, 400, "API error. Transfers must be an array.");
+			goto error0;
+		}
+		
+		int n = array_list_length(transfers_array);
+		for(int i = 0; i < n; ++i) {
+			struct json_object *transfer_obj_type = array_list_get_idx(transfers_array, i);
+			if(!json_object_is_type(transfer_obj_type, json_type_string)) {
+				git_lfs_write_error(io, 400, "API error. Unable to parse transfer list.");
+				goto error0;
+			}
+			const char *transfer_type = json_object_get_string(transfer_obj_type);
+			if(0 == strcmp("basic", transfer_type)) {
+				has_basic_transfer = 1;
+				break;
+			}
+		}
+		
+		if(!has_basic_transfer) {
+			git_lfs_write_error(io, 400, "Unable to handle any of the transfer types.");
+			goto error0;
+		}
+	}
+
 	git_lfs_operation op = git_lfs_operation_unknown;
 	const char *operation_string = json_object_get_string(operation);
 	if(strcmp(operation_string, "upload") == 0) {
