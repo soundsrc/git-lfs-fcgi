@@ -25,6 +25,7 @@
 #include "config.h"
 #include "oid_utils.h"
 #include "socket_utils.h"
+#include "sha256.h"
 
 static os_mutex_t lock = NULL;
 
@@ -105,7 +106,7 @@ static int git_lfs_repo_send_response(int socket,
 	hdr.cookie = cookie;
 	hdr.type = type;
 
-	if(socket_write_fully(socket, &hdr, sizeof(hdr)) < 0) {
+	if(socket_write_fully(socket, &hdr, sizeof(hdr)) != sizeof(hdr)) {
 		return -1;
 	}
 	
@@ -126,19 +127,9 @@ int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config
 {
 	for(;;) {
 		struct repo_cmd_header hdr;
-		if(socket_read_fully(socket, &hdr.magic, sizeof(hdr.magic)) == sizeof(hdr.magic) &&
+		if(socket_read_fully(socket, &hdr, sizeof(hdr)) == sizeof(hdr) &&
 		   hdr.magic == REPO_CMD_MAGIC)
 		{
-			if(socket_read_fully(socket, &hdr.cookie, sizeof(hdr.cookie) < 0))
-			{
-				return -1;
-			}
-			
-			if(socket_read_fully(socket, &hdr.type, sizeof(hdr.type) < 0))
-			{
-				return -1;
-			}
-
 			switch(hdr.type) {
 				case REPO_CMD_CHECK_OID_EXIST:
 				case REPO_CMD_GET_OID:
