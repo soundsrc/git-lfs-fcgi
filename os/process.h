@@ -18,5 +18,6 @@
 #define OS_PROCESS_H
 
 int os_fork();
+int os_kill(int pid, int sig);
 
 #endif

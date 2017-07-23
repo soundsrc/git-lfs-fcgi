@@ -15,8 +15,14 @@
  */
 #include "process.h"
 #include <unistd.h>
+#include <signal.h>
 
 int os_fork()
 {
 	return fork();
+}
+
+int os_kill(int pid, int sig)
+{
+	return kill(pid, sig);
 }
