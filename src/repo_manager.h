@@ -17,6 +17,7 @@
 #define REPO_MANAGER_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 struct git_lfs_config;
 struct git_lfs_repo;
@@ -26,18 +27,12 @@ enum repo_cmd_type
 	REPO_CMD_CHECK_OID_EXIST,
 	REPO_CMD_GET_OID,
 	REPO_CMD_PUT_OID,
-	REPO_CMD_VERIFY,
+	REPO_CMD_COMMIT,
 	REPO_CMD_TERMINATE,
 	REPO_CMD_ERROR
 };
 
 #define REPO_CMD_MAGIC 0xa733f97f
-
-struct repo_magic_cookie
-{
-	uint32_t magic;
-	uint32_t cookie;
-};
 
 struct repo_cmd_header
 {
@@ -53,22 +48,61 @@ struct repo_oid_cmd_data
 	uint8_t oid[32];
 };
 
-struct repo_check_oid_response
+// check oid response
+struct repo_cmd_check_oid_response
 {
 	int exist;
 };
 
-struct repo_oid_response
+struct repo_cmd_get_oid_response
 {
 	long content_length;
-	int successful;
+};
+
+struct repo_cmd_put_oid_response
+{
+	uint32_t ticket;
+};
+
+struct repo_cmd_commit_request
+{
+	uint32_t ticket;
+};
+
+struct repo_cmd_error_response
+{
+	char message[128];
 };
 
 int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config);
 
-int git_lfs_repo_check_oid_exist(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const char *auth, unsigned char oid[32]);
-int git_lfs_repo_get_read_oid_fd(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const char *auth, unsigned char oid[32], int *fd, long *size);
-int git_lfs_repo_get_write_oid_fd(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const char *auth, unsigned char oid[32], int *fd);
+int git_lfs_repo_check_oid_exist(int socket,
+								 const struct git_lfs_config *config,
+								 const struct git_lfs_repo *repo,
+								 const char *auth,
+								 unsigned char oid[32],
+								 char *error_msg,
+								 size_t error_msg_buf_len);
+
+int git_lfs_repo_get_read_oid_fd(int socket,
+								 const struct git_lfs_config *config,
+								 const struct git_lfs_repo *repo,
+								 const char *auth,
+								 unsigned char oid[32],
+								 int *fd,
+								 long *size,
+								 char *error_msg,
+								 size_t error_msg_buf_len);
+
+int git_lfs_repo_get_write_oid_fd(int socket,
+								  const struct git_lfs_config *config,
+								  const struct git_lfs_repo *repo,
+								  const char *auth,
+								  unsigned char oid[32],
+								  int *fd,
+								  char *error_msg,
+								  size_t error_msg_buf_len);
+
 int git_lfs_repo_terminate_service(int socket);
 
 #endif /* repo_manager_h */

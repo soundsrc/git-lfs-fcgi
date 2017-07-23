@@ -269,12 +269,13 @@ static void git_lfs_server_handle_batch(int socket, const struct git_lfs_config 
 		char expire_time[32];
 		strftime(expire_time, sizeof(expire_time), "%FT%TZ", gmtime(&access_token->expire));
 
+		char error_msg[128];
 		switch(op) {
 			case git_lfs_operation_upload:
 			{
-				int result = git_lfs_repo_check_oid_exist(socket, config, repo, "", oid_hash);
+				int result = git_lfs_repo_check_oid_exist(socket, config, repo, "", oid_hash, error_msg, sizeof(error_msg));
 				if(result < 0) {
-					struct json_object *error = create_json_error(400, "Failed to check oid existance.");
+					struct json_object *error = create_json_error(400, "%s", error_msg);
 					json_object_object_add(obj_info, "error", error);
 					json_object_array_add(output_objects, obj_info);
 					continue;
@@ -330,9 +331,9 @@ static void git_lfs_server_handle_batch(int socket, const struct git_lfs_config 
 			
 			case git_lfs_operation_download:
 			{
-				int result = git_lfs_repo_check_oid_exist(socket, config, repo, "", oid_hash);
+				int result = git_lfs_repo_check_oid_exist(socket, config, repo, "", oid_hash, error_msg, sizeof(error_msg));
 				if(result < 0) {
-					struct json_object *error = create_json_error(400, "Failed to check oid existance.");
+					struct json_object *error = create_json_error(400, "%s", error_msg);
 					json_object_object_add(obj_info, "error", error);
 					json_object_array_add(output_objects, obj_info);
 					continue;
@@ -411,8 +412,9 @@ static void git_lfs_download(int socket, const struct git_lfs_config *config, co
 
 	int fd;
 	long filesize;
-	if(git_lfs_repo_get_read_oid_fd(socket, config, repo, "", oid_bytes, &fd, &filesize) < 0) {
-		git_lfs_write_error(io, 400, "Unable to download object.");
+	char error_msg[128];
+	if(git_lfs_repo_get_read_oid_fd(socket, config, repo, "", oid_bytes, &fd, &filesize, error_msg, sizeof(error_msg)) < 0) {
+		git_lfs_write_error(io, 400, "%s", error_msg);
 		return;
 	}
 
@@ -444,8 +446,9 @@ static void git_lfs_upload(int socket, const struct git_lfs_config *config, cons
 	oid_from_string(oid, oid_bytes);
 	
 	int fd;
-	if(git_lfs_repo_get_write_oid_fd(socket, config, repo, "", oid_bytes, &fd) < 0) {
-		git_lfs_write_error(io, 400, "Unable to upload object.");
+	char error_msg[128];
+	if(git_lfs_repo_get_write_oid_fd(socket, config, repo, "", oid_bytes, &fd, error_msg, sizeof(error_msg)) < 0) {
+		git_lfs_write_error(io, 400, "%s", error_msg);
 		return;
 	}
 	
