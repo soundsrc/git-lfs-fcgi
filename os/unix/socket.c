@@ -60,6 +60,8 @@ int os_recv_with_file_descriptor(int socket, void *buffer, int size, int *fd)
 	vec.iov_base = buffer;
 	vec.iov_len = size;
 	
+	msg.msg_iov = &vec;
+	msg.msg_iovlen = 1;
 	msg.msg_control = buf;
 	msg.msg_controllen = sizeof(buf);
 	
