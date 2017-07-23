@@ -253,7 +253,7 @@ int git_lfs_repo_get_write_oid_fd(int socket, const struct git_lfs_config *confi
 	struct repo_oid_response put_oid_resp;
 	
 	if(git_lfs_repo_send_request(socket,
-								 REPO_CMD_GET_OID,
+								 REPO_CMD_PUT_OID,
 								 &put_oid_req, sizeof(put_oid_req),
 								 &put_oid_resp, sizeof(put_oid_resp),
 								 fd) < 0) {
