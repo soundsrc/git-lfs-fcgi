@@ -304,25 +304,7 @@ static void git_lfs_server_handle_batch(int socket, const struct git_lfs_config 
 					
 					struct json_object *actions = json_object_new_object();
 					json_object_object_add(actions, "upload", upload);
-					
-					// add verify url
-					if(snprintf(url, sizeof(url), "%s/%s/verify", config->base_url, repo->uri) >= (long)sizeof(url)) {
-						struct json_object *error = create_json_error(400, "Upload URL is too long.");
-						json_object_object_add(obj_info, "error", error);
-						json_object_array_add(output_objects, obj_info);
-						json_object_put(actions);
-						continue;
-					}
 
-					struct json_object *verify = json_object_new_object();
-					json_object_object_add(verify, "href", json_object_new_string(url));
-					
-					header = json_object_new_object();
-					json_object_object_add(header, "Access-Token", json_object_new_string(access_token->token));
-					json_object_object_add(verify, "header", header);
-					
-					json_object_object_add(verify, "expires_at", json_object_new_string(expire_time));
-					json_object_object_add(actions, "verify", verify);
 					json_object_object_add(obj_info, "actions", actions);
 				}
 
@@ -471,73 +453,6 @@ static void git_lfs_upload(int socket, const struct git_lfs_config *config, cons
 	io->write_headers(io->context, NULL, 0);
 }
 
-static void git_lfs_verify(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io)
-{
-	char buffer[4096];
-	int n;
-	json_tokener * tokener = json_tokener_new();
-	struct json_object *root = NULL;
-
-	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0)
-	{
-		root = json_tokener_parse_ex(tokener, buffer, n);
-		enum json_tokener_error err = json_tokener_get_error(tokener);
-		if(err == json_tokener_success) break;
-		if(err != json_tokener_continue) {
-			git_lfs_write_error(io, 400, "JSON parsing error.");
-			goto error0;
-		}
-	}
-	
-	struct json_object *oid, *size;
-	if(!json_object_object_get_ex(root, "oid", &oid) ||
-	   !json_object_is_type(oid, json_type_string) ||
-	   !json_object_object_get_ex(root, "size", &size) ||
-	   !json_object_is_type(size, json_type_int))
-	{
-		git_lfs_write_error(io, 400, "API error. Missing oid and size.");
-		goto error0;
-	}
-	
-	const char *oid_string = json_object_get_string(oid);
-	if(!oid_is_valid(oid_string))
-	{
-		git_lfs_write_error(io, 400, "Invalid oid passed to verify.");
-		goto error0;
-	}
-
-	char object_path[PATH_MAX];
-	if(snprintf(object_path, sizeof(object_path), "%s/%.2s/%s", repo->root_dir, oid_string, oid_string) >= (long)sizeof(object_path))
-	{
-		git_lfs_write_error(io, 400, "Object path is too long.");
-		goto error0;
-	}
-	
-	long filesize = os_file_size(object_path);
-	if(filesize < 0)
-	{
-		git_lfs_write_error(io, 404, "Object not found.");
-		goto error0;
-	}
-	
-	if(filesize != json_object_get_int(size))
-	{
-		git_lfs_write_error(io, 422, "Object size (%ld bytes) does not match the verify size (%d bytes).", filesize, json_object_get_int(size));
-		goto error0;
-	}
-	
-	const char *headers[] = {
-		"Content-Type: application/vnd.git-lfs+json",
-	};
-	
-	io->write_http_status(io->context, 200, "OK");
-	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
-
-error0:
-	if(root) json_object_put(root);
-	json_tokener_free(tokener);
-}
-
 void git_lfs_server_handle_request(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *method, const char *end_point)
 {
 	if(config->verbose >= 1)
@@ -574,8 +489,6 @@ void git_lfs_server_handle_request(int socket, const struct git_lfs_config *conf
 		if(strcmp(end_point, "/objects/batch") == 0)
 		{
 			git_lfs_server_handle_batch(socket, config, repo, io);
-		} else if(strcmp(end_point, "/verify") == 0) {
-			git_lfs_verify(socket, config, repo, io);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
