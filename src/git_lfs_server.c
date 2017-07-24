@@ -445,9 +445,10 @@ static void git_lfs_upload(int socket, const struct git_lfs_config *config, cons
 	uint8_t oid_bytes[SHA256_DIGEST_LENGTH];
 	oid_from_string(oid, oid_bytes);
 	
+	uint32_t ticket;
 	int fd;
 	char error_msg[128];
-	if(git_lfs_repo_get_write_oid_fd(socket, config, repo, "", oid_bytes, &fd, error_msg, sizeof(error_msg)) < 0) {
+	if(git_lfs_repo_get_write_oid_fd(socket, config, repo, "", oid_bytes, &fd, &ticket, error_msg, sizeof(error_msg)) < 0) {
 		git_lfs_write_error(io, 400, "%s", error_msg);
 		return;
 	}
@@ -459,6 +460,12 @@ static void git_lfs_upload(int socket, const struct git_lfs_config *config, cons
 	}
 
 	os_close(fd);
+	
+	// commit
+	if(git_lfs_repo_commit(socket, ticket, error_msg, sizeof(error_msg)) < 0) {
+		git_lfs_write_error(io, 400, "%s", error_msg);
+		return;
+	}
 
 	io->write_http_status(io->context, 200, "OK");
 	io->write_headers(io->context, NULL, 0);

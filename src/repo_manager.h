@@ -100,8 +100,14 @@ int git_lfs_repo_get_write_oid_fd(int socket,
 								  const char *auth,
 								  unsigned char oid[32],
 								  int *fd,
+								  uint32_t *ticket,
 								  char *error_msg,
 								  size_t error_msg_buf_len);
+
+int git_lfs_repo_commit(int socket,
+						uint32_t ticket,
+						char *error_msg,
+						size_t error_msg_buf_len);
 
 int git_lfs_repo_terminate_service(int socket);
 
