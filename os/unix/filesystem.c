@@ -51,7 +51,17 @@ int os_rename(const char *src_path, const char *dest_path)
 	return rename(src_path, dest_path);
 }
 
+int os_unlink(const char *path)
+{
+	return unlink(path);
+}
+
 int os_chroot(const char *path)
 {
 	return chroot(path);
+}
+
+int os_mkstemp(char *template_path)
+{
+	return mkstemp(template_path);
 }
