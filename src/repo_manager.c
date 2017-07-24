@@ -382,6 +382,7 @@ int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config
 						continue;
 					}
 					
+					LIST_REMOVE(upload, entries);
 					os_unlink(upload->tmp_path);
 					free(upload);
 				}
