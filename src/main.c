@@ -35,6 +35,21 @@
 #include "repo_manager.h"
 #include "mongoose.h"
 
+int child_pid = -1;
+
+static void child_terminated(int sig)
+{
+	fprintf(stderr, "Unexpected termination of child process.\n");
+	exit(-1);
+}
+
+static void sig_term(int sig)
+{
+	if(child_pid >= 0) {
+		os_kill(child_pid, SIGTERM);
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	int verbose = 0;
@@ -107,15 +122,15 @@ int main(int argc, char *argv[])
 		goto error1;
 	}
 	
-	int pid = os_fork();
-	if(pid < 0) {
+	child_pid = os_fork();
+	if(child_pid < 0) {
 		fprintf(stderr, "Failed to fork process.\n");
 		os_close(fd[1]);
 		os_close(fd[0]);
 		goto error1;
 	}
 	
-	if(pid == 0) {
+	if(child_pid == 0) {
 		if(os_sandbox(SANDBOX_FILEIO) < 0) {
 			fprintf(stderr, "Sandbox failed.\n");
 			goto error1;
@@ -125,6 +140,11 @@ int main(int argc, char *argv[])
 		git_lfs_repo_manager_service(fd[1], config);
 		os_close(fd[1]);
 	} else {
+		
+		signal(SIGCHLD, child_terminated);
+		signal(SIGTERM, sig_term);
+		signal(SIGQUIT, sig_term);
+		signal(SIGSTOP, sig_term);
 		
 		// todo, allow configurable
 		if(os_chroot("/var/empty") < 0) {
