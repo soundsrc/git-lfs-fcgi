@@ -19,7 +19,7 @@
 
 int socket_read_fully(int fd, void *buffer, int size)
 {
-	int n;
+	int n = 0;
 	int total = 0;
 	
 	while(size > 0 && (n = os_read(fd, buffer, size)) > 0)
@@ -38,7 +38,7 @@ int socket_read_fully(int fd, void *buffer, int size)
 
 int socket_write_fully(int fd, const void *buffer, int size)
 {
-	int n;
+	int n = 0;
 	int total = 0;
 	
 	while(size > 0 && (n = os_write(fd, buffer, size)) > 0)
