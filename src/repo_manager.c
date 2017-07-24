@@ -407,6 +407,7 @@ terminate:;
 	struct upload_entry *upload, *tmp;
 	LIST_FOREACH_SAFE(upload, &upload_list, entries, tmp)
 	{
+		LIST_REMOVE(upload, entries);
 		os_unlink(upload->tmp_path);
 		free(upload);
 	}
