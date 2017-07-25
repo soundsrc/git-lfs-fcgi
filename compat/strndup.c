@@ -1,5 +1,7 @@
+/*	$OpenBSD: strndup.c,v 1.2 2015/08/31 02:53:57 guenther Exp $	*/
+
 /*
- * Copyright (c) 2016 Sound <sound@sagaforce.com>
+ * Copyright (c) 2010 Todd C. Miller <Todd.Miller@courtesan.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,22 +16,24 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef COMPAT_STRING_H
-#define COMPAT_STRING_H
+#include <sys/types.h>
 
 #include <stddef.h>
-
-#if !defined(__FreeBSD__) && \
-	!defined(__OpenBSD__) && \
-	!defined(__APPLE__)
-
-size_t strlcat(char *dst, const char *src, size_t dsize);
-size_t strlcpy(char *dst, const char *src, size_t dsize);
-char *strsep(char **stringp, const char *delim);
-char *strndup(const char *str, size_t maxlen);
-
-#else
+#include <stdlib.h>
 #include <string.h>
-#endif
 
-#endif
+char *
+strndup(const char *str, size_t maxlen)
+{
+	char *copy;
+	size_t len;
+
+	len = strnlen(str, maxlen);
+	copy = malloc(len + 1);
+	if (copy != NULL) {
+		(void)memcpy(copy, str, len);
+		copy[len] = '\0';
+	}
+
+	return copy;
+}

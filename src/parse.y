@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include "compat/string.h"
 #include "configuration.h"
 
 extern int scan_line_count;
