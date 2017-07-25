@@ -23,11 +23,7 @@ struct password_entry
 	SLIST_ENTRY(password_entry) entries;
 
 	char username[33];
-	
-	unsigned int bcrypt_count;
-	char bcrypt_prefix[3];
-	char bcrypt_salt[23];
-	char bcrypt_hash[32];
+	char bcrypt_hash[61];
 };
 
 SLIST_HEAD(htpasswd, password_entry);

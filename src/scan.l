@@ -26,6 +26,10 @@ chroot_user { return CHROOT_USER; }
 chroot_group { return CHROOT_GROUP; }
 chroot_path { return CHROOT_PATH; }
 
+enable_authentication { return ENABLE_AUTHENTICATION; }
+auth_realm { return AUTH_REALM; }
+auth_file { return AUTH_FILE; }
+
 fastcgi_socket { return FASTCGI_SOCKET; }
 
 include { return INCLUDE; }

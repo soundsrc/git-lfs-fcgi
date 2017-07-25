@@ -24,6 +24,7 @@
 #define PATH_MAX 1024
 #endif
 
+struct htpasswd;
 struct git_lfs_repo
 {
 	SLIST_ENTRY(git_lfs_repo) entries;
@@ -32,6 +33,10 @@ struct git_lfs_repo
 	char *name; // name of repo
 	char *uri; // uri
 	char *root_dir; // root directory for files
+	
+	int enable_authentication;
+	char *auth_realm;
+	struct htpasswd *auth;
 };
 
 SLIST_HEAD(git_lfs_repo_list, git_lfs_repo);

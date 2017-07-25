@@ -56,6 +56,8 @@ void git_lfs_free_config(struct git_lfs_config *config)
 
 	struct git_lfs_repo *repo, *temp;
 	SLIST_FOREACH_SAFE(repo, &config->repos, entries, temp) {
+		free(repo->auth_realm);
+		free(repo->auth);
 		free(repo->name);
 		free(repo->uri);
 		free(repo->root_dir);

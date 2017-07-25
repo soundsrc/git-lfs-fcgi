@@ -88,15 +88,16 @@ struct htpasswd *load_htpasswd_file(const char *filename)
 			continue;
 		}
 
-		memcpy(user->bcrypt_prefix, &bcrypt_hash[0], sizeof(user->bcrypt_prefix) - 1);
-		user->bcrypt_count = count;
-		memcpy(user->bcrypt_prefix, &bcrypt_hash[0], sizeof(user->bcrypt_prefix) - 1);
-		memcpy(user->bcrypt_salt, &bcrypt_hash[7], 22);
-		memcpy(user->bcrypt_hash, &bcrypt_hash[29], 31);
+		if(strlcpy(user->bcrypt_hash, bcrypt_hash, sizeof(user->bcrypt_hash)) >= sizeof(user->bcrypt_hash))
+		{
+			fprintf(stderr, "htpasswd: Ignored user '%s', hash is too long.\n", username);
+			free(user);
+			continue;
+		}
 		
 		SLIST_INSERT_HEAD(htp, user, entries);
 	}
-	
+
 	fclose(fp);
 	
 	return htp;
@@ -109,17 +110,9 @@ int authenticate_user_with_password(struct htpasswd *htpasswd, const char *usern
 	{
 		if(0 == strcmp(user->username, username))
 		{
-			char setting[40];
-			char hash[32];
-			if (_crypt_gensalt_blowfish_rn(user->bcrypt_prefix,
-										   user->bcrypt_count,
-										   user->bcrypt_salt, sizeof(user->bcrypt_salt),
-										   setting, sizeof(setting)) == NULL)
-			{
-				return 0;
-			}
+			char hash[61];
 
-			if (_crypt_blowfish_rn(password, setting, hash, sizeof(hash)) == NULL)
+			if (_crypt_blowfish_rn(password, user->bcrypt_hash, hash, sizeof(hash)) == NULL)
 			{
 				return 0;
 			}

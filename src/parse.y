@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "compat/string.h"
+#include "htpasswd.h"
 #include "configuration.h"
 
 extern int scan_line_count;
@@ -44,6 +45,9 @@ void config_parse_init(const char *filename, struct git_lfs_config *config)
 %token CHROOT_USER
 %token CHROOT_GROUP
 %token FASTCGI_SOCKET
+%token AUTH_REALM
+%token ENABLE_AUTHENTICATION
+%token AUTH_FILE
 %token <ival> INTEGER
 %token <sval> STRING
 %token INCLUDE
@@ -101,6 +105,7 @@ repo_declaration
 	: REPO STRING {
 		parse_repo = (struct git_lfs_repo *)calloc(1, sizeof(struct git_lfs_repo));
 		parse_repo->name = strndup($2, sizeof($2));
+		parse_repo->enable_authentication = 1;
 		parse_repo->id = s_next_id++;
 	}
 	'{' repo_params_list '}' {
@@ -121,4 +126,19 @@ repo_param
  	| URI STRING {
  		parse_repo->uri = strndup($2, sizeof($2));	
  	}
+	| ENABLE_AUTHENTICATION YES {
+		parse_repo->enable_authentication = 1;
+	}
+	| ENABLE_AUTHENTICATION NO {
+		parse_repo->enable_authentication = 0;
+	}
+	| AUTH_REALM STRING {
+		parse_repo->auth_realm = strndup($2, sizeof($2));
+	}
+	| AUTH_FILE STRING {
+		parse_repo->auth = load_htpasswd_file($2);
+		if(!parse_repo->auth) {
+			yyerror("Unable to open htpasswd file.");
+		}
+	}
  	;
