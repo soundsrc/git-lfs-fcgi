@@ -60,10 +60,14 @@ bison_target(ConfigParser src/parse.y ${CMAKE_CURRENT_BINARY_DIR}/config_parser.
 flex_target(ConfigParser src/scan.l ${CMAKE_CURRENT_BINARY_DIR}/config_scanner.l.c)
 
 set(SRC_FILES
+	"src/crypt_blowfish.c"
+	"src/crypt_blowfish.h"
 	"src/configuration.c"
 	"src/configuration.h"
 	"src/git_lfs_server.c"
 	"src/git_lfs_server.h"
+	"src/htpasswd.c"
+	"src/htpasswd.h"
 	"src/httpd.c"
 	"src/httpd.h"
 	"src/main.c"
