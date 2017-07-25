@@ -1,5 +1,5 @@
 %{
-#include "y.tab.h"
+#include "config_parser.y.h"
 
 int scan_line_count;
 
