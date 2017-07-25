@@ -20,7 +20,7 @@
 #include <stdarg.h>
 #include <time.h>
 #include <errno.h>
-#include "sha256.h"
+#include <openssl/sha.h>
 #include "json.h"
 #include "compat/string.h"
 #include "compat/queue.h"

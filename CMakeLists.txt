@@ -74,8 +74,6 @@ set(SRC_FILES
 	"src/oid_utils.h"
 	"src/repo_manager.c"
 	"src/repo_manager.h"
-	"src/sha256.c"
-	"src/sha256.h"
 	"src/socket_io.h"
 	"src/socket_utils.c"
 	"src/socket_utils.h"
@@ -101,8 +99,6 @@ endif(APPLE)
 add_executable(git-lfs-server
 	${SRC_FILES}
 )
-
-
 
 target_include_directories(git-lfs-server PUBLIC
 	"${CMAKE_CURRENT_SOURCE_DIR}"

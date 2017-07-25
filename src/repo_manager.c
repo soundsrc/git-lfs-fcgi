@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <openssl/sha.h>
 #include "compat/queue.h"
 #include "os/mutex.h"
 #include "os/io.h"
@@ -26,7 +27,6 @@
 #include "config.h"
 #include "oid_utils.h"
 #include "socket_utils.h"
-#include "sha256.h"
 
 static os_mutex_t lock = NULL;
 
