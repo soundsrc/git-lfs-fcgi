@@ -1,9 +1,9 @@
 %{
 #include "y.tab.h"
 
-static int scan_line_count;
+int scan_line_count;
 
-static void scan_init()
+void config_scan_init()
 {
 	scan_line_count = 1;
 }

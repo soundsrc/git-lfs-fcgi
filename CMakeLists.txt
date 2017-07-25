@@ -56,8 +56,8 @@ target_include_directories(fcgi PUBLIC
 	"external/libfcgi/include"
 )
 
-bison_target(GitLfsServer src/parse.y ${CMAKE_CURRENT_BINARY_DIR}/y.tab.c)
-flex_target(GitLfsServer src/scan.l ${CMAKE_CURRENT_BINARY_DIR}/lex.yy.c)
+bison_target(ConfigParser src/parse.y ${CMAKE_CURRENT_BINARY_DIR}/config_parser.y.c)
+flex_target(ConfigParser src/scan.l ${CMAKE_CURRENT_BINARY_DIR}/config_scanner.l.c)
 
 set(SRC_FILES
 	"src/configuration.c"
@@ -77,6 +77,8 @@ set(SRC_FILES
 	"src/socket_io.h"
 	"src/socket_utils.c"
 	"src/socket_utils.h"
+	"src/parse.y"
+	"src/scan.l"
 )
 if(APPLE)
 	list(APPEND SRC_FILES
@@ -98,10 +100,13 @@ endif(APPLE)
 
 add_executable(git-lfs-server
 	${SRC_FILES}
+	${BISON_ConfigParser_OUTPUTS} 
+	${FLEX_ConfigParser_OUTPUTS}
 )
 
 target_include_directories(git-lfs-server PUBLIC
 	"${CMAKE_CURRENT_SOURCE_DIR}"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src"
 	"${CMAKE_CURRENT_SOURCE_DIR}/external/libressl/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/external/mongoose"
 	"${CMAKE_CURRENT_SOURCE_DIR}/external/json-c"
