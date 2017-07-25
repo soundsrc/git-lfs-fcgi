@@ -28,7 +28,7 @@
 #include "os/socket.h"
 #include "os/process.h"
 #include "os/sandbox.h"
-#include "config.h"
+#include "configuration.h"
 #include "socket_io.h"
 #include "httpd.h"
 #include "git_lfs_server.h"

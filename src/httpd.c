@@ -26,7 +26,7 @@
 #include "os/threads.h"
 #include "git_lfs_server.h"
 #include "socket_io.h"
-#include "config.h"
+#include "configuration.h"
 
 static os_mutex_t running_mutex;
 static os_mutex_t accept_mutex;

@@ -27,7 +27,7 @@
 #include "os/filesystem.h"
 #include "os/mutex.h"
 #include "os/io.h"
-#include "config.h"
+#include "configuration.h"
 #include "socket_io.h"
 #include "oid_utils.h"
 #include "repo_manager.h"

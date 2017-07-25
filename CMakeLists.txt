@@ -60,8 +60,8 @@ bison_target(GitLfsServer src/parse.y ${CMAKE_CURRENT_BINARY_DIR}/y.tab.c)
 flex_target(GitLfsServer src/scan.l ${CMAKE_CURRENT_BINARY_DIR}/lex.yy.c)
 
 set(SRC_FILES
-	"src/config.c"
-	"src/config.h"
+	"src/configuration.c"
+	"src/configuration.h"
 	"src/git_lfs_server.c"
 	"src/git_lfs_server.h"
 	"src/httpd.c"

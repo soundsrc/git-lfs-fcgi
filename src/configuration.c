@@ -13,18 +13,13 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#include "config.h"
+#include "configuration.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include "compat/queue.h"
 
-#include "lex.yy.c"
-#include "y.tab.c"
-
-int yyerror (const char *msg)
-{
-	printf("%s:%d: %s\n", parse_filename, scan_line_count, msg);
-	return 0;
-}
+extern FILE * yyin;
+extern int yyparse (void);
 
 struct git_lfs_config *git_lfs_load_config(const char *path)
 {
@@ -40,8 +35,8 @@ struct git_lfs_config *git_lfs_load_config(const char *path)
 
 	SLIST_INIT(&config->repos);
 
-	scan_init();
-	parse_init(path, config);
+	config_scan_init();
+	config_parse_init(path, config);
 
 	yyparse();
 	

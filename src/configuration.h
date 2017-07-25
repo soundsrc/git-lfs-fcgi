@@ -14,8 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef CONFIG_H
-#define CONFIG_H
+#ifndef CONFIGURATION_H
+#define CONFIGURATION_H
 
 #include <stdint.h>
 #include "compat/queue.h"
@@ -59,5 +59,8 @@ struct git_lfs_config
 
 struct git_lfs_config *git_lfs_load_config(const char *path);
 void git_lfs_free_config(struct git_lfs_config *config);
+
+extern void config_scan_init();
+void config_parse_init(const char *filename, struct git_lfs_config *config);
 
 #endif

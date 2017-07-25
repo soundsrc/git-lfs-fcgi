@@ -24,7 +24,7 @@
 #include "os/io.h"
 #include "os/socket.h"
 #include "os/filesystem.h"
-#include "config.h"
+#include "configuration.h"
 #include "oid_utils.h"
 #include "socket_utils.h"
 
