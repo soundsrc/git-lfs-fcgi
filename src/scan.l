@@ -40,7 +40,7 @@ include { return INCLUDE; }
 	yylval.ival = strtol(yytext, NULL, 0);
 	return INTEGER;
 }
-#.*\n /* comment */
+#.*\n { scan_line_count++; } /* comment */
 \n { scan_line_count++; }
 [ \t\r]+ /* eat whitespace */
 "{" { return '{'; }
