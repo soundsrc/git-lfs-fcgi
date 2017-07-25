@@ -54,15 +54,17 @@ void git_lfs_free_config(struct git_lfs_config *config)
 	free(config->chroot_user);
 	free(config->chroot_group);
 
-	struct git_lfs_repo *repo, *temp;
-	SLIST_FOREACH_SAFE(repo, &config->repos, entries, temp) {
+	while (!SLIST_EMPTY(&config->repos))
+	{
+		struct git_lfs_repo *repo = SLIST_FIRST(&config->repos);
+		SLIST_REMOVE_HEAD(&config->repos, entries);
+		
 		free(repo->auth_realm);
 		free(repo->auth);
 		free(repo->name);
 		free(repo->uri);
 		free(repo->root_dir);
 		
-		SLIST_REMOVE(&config->repos, repo, git_lfs_repo, entries);
 		free(repo);
 	}
 
