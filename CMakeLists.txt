@@ -67,7 +67,6 @@ set(SRC_FILES
 	"src/httpd.c"
 	"src/httpd.h"
 	"src/main.c"
-	"src/md32_common.h"
 	"src/mkdir_recusive.c"
 	"src/mkdir_recusive.h"
 	"src/oid_utils.c"
