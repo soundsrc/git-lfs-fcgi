@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <time.h>
 #include <openssl/sha.h>
 #include "compat/queue.h"
 #include "os/mutex.h"
@@ -27,6 +28,7 @@
 #include "configuration.h"
 #include "oid_utils.h"
 #include "socket_utils.h"
+#include "htpasswd.h"
 
 static os_mutex_t lock = NULL;
 
@@ -42,6 +44,51 @@ struct upload_entry
 
 static LIST_HEAD(upload_entry_list, upload_entry) upload_list;
 static uint32_t next_upload_id = 0;
+
+// access token lets one access files of the reps
+struct git_lfs_access_token
+{
+	LIST_ENTRY(git_lfs_access_token) entries;
+	
+	char token[16];
+	time_t expire;
+	const struct git_lfs_repo *repo;
+};
+
+static LIST_HEAD(git_lfs_access_token_list, git_lfs_access_token) access_token_list;
+
+static struct git_lfs_access_token *git_lfs_add_access_token(const struct git_lfs_repo *repo, time_t expires_at)
+{
+	static const char ch[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+	
+	struct git_lfs_access_token *access_token = calloc(1, sizeof *access_token);
+	access_token->expire = expires_at;
+	access_token->repo = repo;
+	
+	for(int i = 0; i < sizeof(access_token->token) - 1; ++i)
+	{
+		access_token->token[i] = ch[rand() % (sizeof(ch) - 1)];
+	}
+	access_token->token[sizeof(access_token->token) - 1] = 0;
+	
+	LIST_INSERT_HEAD(&access_token_list, access_token, entries);
+	
+	return access_token;
+}
+
+static void git_lfs_cleanup_access_tokens()
+{
+	struct git_lfs_access_token *access_token, *tmp;
+	time_t now = time(NULL);
+	LIST_FOREACH_SAFE(access_token, &access_token_list, entries, tmp)
+	{
+		if(access_token->expire > now) {
+			LIST_REMOVE(access_token, entries);
+			free(access_token);
+		}
+	}
+}
+
 
 static struct git_lfs_repo * find_repo_by_id(const struct git_lfs_config *config, int id)
 {
@@ -161,6 +208,48 @@ static int git_lfs_repo_send_error_response(int socket, uint32_t cookie, const c
 	return git_lfs_repo_send_response(socket, REPO_CMD_ERROR, cookie, &err_resp, sizeof(err_resp), NULL);
 }
 
+static int handle_cmd_auth(int socket, uint32_t cookie, const struct git_lfs_config *config)
+{
+	struct repo_cmd_auth_request request;
+	struct repo_cmd_auth_response response;
+	
+	memset(&request, 0, sizeof(request));
+	memset(&response, 0, sizeof(response));
+
+	if(socket_read_fully(socket, &request, sizeof(request)) != sizeof(request))
+	{
+		return -1;
+	}
+	
+	// check for unterminated username/password
+	if(request.username[sizeof(request.username) - 1] != 0)
+	{
+		return -1;
+	}
+	
+	if(request.password[sizeof(request.password) - 1] != 0)
+	{
+		return -1;
+	}
+	
+	struct git_lfs_repo *repo = find_repo_by_id(config, request.repo_id);
+	if(!repo) {
+		git_lfs_repo_send_error_response(socket, cookie, "Invalid repo id.");
+		return 0;
+	}
+	
+	response.success = authenticate_user_with_password(repo->auth, request.username, request.password);
+	if(response.success)
+	{
+		git_lfs_cleanup_access_tokens();
+		struct git_lfs_access_token *token = git_lfs_add_access_token(repo, time(NULL) + 60);
+		response.expire = token->expire;
+		strlcpy(response.access_token, token->token, sizeof(response.access_token));
+	}
+	
+	return git_lfs_repo_send_response(socket, REPO_CMD_AUTH, cookie, &response, sizeof(response), NULL);
+}
+
 int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config)
 {
 	int ret = -1;
@@ -177,6 +266,9 @@ int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config
 		}
 		
 		switch(hdr.type) {
+			case REPO_CMD_AUTH:
+				handle_cmd_auth(socket, hdr.cookie, config);
+				break;
 			case REPO_CMD_CHECK_OID_EXIST:
 			case REPO_CMD_GET_OID:
 			case REPO_CMD_PUT_OID:
@@ -415,6 +507,53 @@ terminate:;
 	
 	
 	return ret;
+}
+
+int git_lfs_repo_authenticate(int socket,
+							  const struct git_lfs_config *config,
+							  const struct git_lfs_repo *repo,
+							  const char *username,
+							  const char *password,
+							  char *access_token,
+							  size_t access_token_size,
+							  time_t *expire,
+							  char *error_msg,
+							  size_t error_msg_buf_len)
+{
+	struct repo_cmd_auth_request request;
+	struct repo_cmd_auth_response response;
+	
+	if(access_token_size < sizeof(response.access_token))
+	{
+		return -1;
+	}
+
+	memset(&request, 0, sizeof(request));
+	request.repo_id = repo->id;
+	if(strlcpy(request.username, username, sizeof(request.username)) >= sizeof(request.username))
+	{
+		return -1;
+	}
+
+	if(strlcpy(request.password, password, sizeof(request.password)) >= sizeof(request.password))
+	{
+		return -1;
+	}
+	
+	if(git_lfs_repo_send_request(socket,
+								 REPO_CMD_AUTH,
+								 &request, sizeof(request),
+								 &response, sizeof(response),
+								 NULL,
+								 error_msg, error_msg_buf_len) < 0) {
+		return -1;
+	}
+	
+	response.access_token[sizeof(response.access_token) - 1] = 0;
+	strlcpy(access_token, response.access_token, sizeof(response.access_token));
+	*expire = response.expire;
+
+	return response.success;
 }
 
 int git_lfs_repo_check_oid_exist(int socket,
