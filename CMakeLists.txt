@@ -85,6 +85,8 @@ set(SRC_FILES
 )
 if(APPLE)
 	list(APPEND SRC_FILES
+		"compat/base64.c"
+		"compat/explicit_bzero.c"
 		"os/unix/droproot.c"
 		"os/unix/filesystem.c"
 		"os/unix/io.c"

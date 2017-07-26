@@ -26,6 +26,8 @@ struct git_lfs_repo;
 struct repo_manager
 {
 	int socket;
+	char access_token[16];
+	time_t access_token_expire;
 };
 
 enum repo_cmd_type
@@ -45,13 +47,13 @@ struct repo_cmd_header
 {
 	uint32_t magic;
 	uint32_t cookie;
+	char access_token[16];
 	enum repo_cmd_type type;
 };
 
 struct repo_oid_cmd_data
 {
 	int repo_id;
-	char auth[16];
 	uint8_t oid[32];
 };
 
@@ -113,7 +115,6 @@ int git_lfs_repo_authenticate(struct repo_manager *mgr,
 int git_lfs_repo_check_oid_exist(struct repo_manager *mgr,
 								 const struct git_lfs_config *config,
 								 const struct git_lfs_repo *repo,
-								 const char *auth,
 								 unsigned char oid[32],
 								 char *error_msg,
 								 size_t error_msg_buf_len);
@@ -121,7 +122,6 @@ int git_lfs_repo_check_oid_exist(struct repo_manager *mgr,
 int git_lfs_repo_get_read_oid_fd(struct repo_manager *mgr,
 								 const struct git_lfs_config *config,
 								 const struct git_lfs_repo *repo,
-								 const char *auth,
 								 unsigned char oid[32],
 								 int *fd,
 								 long *size,
@@ -131,7 +131,6 @@ int git_lfs_repo_get_read_oid_fd(struct repo_manager *mgr,
 int git_lfs_repo_get_write_oid_fd(struct repo_manager *mgr,
 								  const struct git_lfs_config *config,
 								  const struct git_lfs_repo *repo,
-								  const char *auth,
 								  unsigned char oid[32],
 								  int *fd,
 								  uint32_t *ticket,

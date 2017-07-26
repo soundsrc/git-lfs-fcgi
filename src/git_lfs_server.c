@@ -24,6 +24,7 @@
 #include "json.h"
 #include "compat/string.h"
 #include "compat/queue.h"
+#include "compat/base64.h"
 #include "os/filesystem.h"
 #include "os/mutex.h"
 #include "os/io.h"
@@ -33,51 +34,6 @@
 #include "repo_manager.h"
 #include "mkdir_recusive.h"
 #include "git_lfs_server.h"
-
-
-// access token lets one access files of the reps
-struct git_lfs_access_token
-{
-	LIST_ENTRY(git_lfs_access_token) entries;
-
-	char token[16];
-	time_t expire;
-	const struct git_lfs_repo *repo;
-};
-
-static LIST_HEAD(git_lfs_access_token_list, git_lfs_access_token) access_token_list;
-
-static struct git_lfs_access_token *git_lfs_add_access_token(const struct git_lfs_repo *repo, time_t expires_at)
-{
-	static const char ch[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-
-	struct git_lfs_access_token *access_token = calloc(1, sizeof *access_token);
-	access_token->expire = expires_at;
-	access_token->repo = repo;
-	
-	for(int i = 0; i < sizeof(access_token->token) - 1; ++i)
-	{
-		access_token->token[i] = ch[rand() % (sizeof(ch) - 1)];
-	}
-	access_token->token[sizeof(access_token->token) - 1] = 0;
-	
-	LIST_INSERT_HEAD(&access_token_list, access_token, entries);
-
-	return access_token;
-}
-
-static void git_lfs_cleanup_access_tokens()
-{
-	struct git_lfs_access_token *access_token, *tmp;
-	time_t now = time(NULL);
-	LIST_FOREACH_SAFE(access_token, &access_token_list, entries, tmp)
-	{
-		if(access_token->expire > now) {
-			LIST_REMOVE(access_token, entries);
-			free(access_token);
-		}
-	}
-}
 
 typedef enum git_lfs_operation_type
 {
@@ -139,7 +95,10 @@ static struct json_object *create_json_error(int error_code, const char *format,
 	return error;
 }
 
-static void git_lfs_server_handle_batch(struct repo_manager *mgr, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io)
+static void git_lfs_server_handle_batch(struct repo_manager *mgr,
+										const struct git_lfs_config *config,
+										const struct git_lfs_repo *repo,
+										const struct socket_io *io)
 {
 	char buffer[4096];
 	int n;
@@ -219,10 +178,7 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr, const struct g
 		git_lfs_write_error(io, 400, "API error. Missing objects.");
 		goto error0;
 	}
-	
-	git_lfs_cleanup_access_tokens();
-	struct git_lfs_access_token *access_token = git_lfs_add_access_token(repo, time(NULL) + 600);
-	
+
 	struct json_object *response_object = json_object_new_object();
 	struct json_object *output_objects = json_object_new_array();
 	
@@ -267,13 +223,13 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr, const struct g
 		}
 		
 		char expire_time[32];
-		strftime(expire_time, sizeof(expire_time), "%FT%TZ", gmtime(&access_token->expire));
+		strftime(expire_time, sizeof(expire_time), "%FT%TZ", gmtime(&mgr->access_token_expire));
 
 		char error_msg[128];
 		switch(op) {
 			case git_lfs_operation_upload:
 			{
-				int result = git_lfs_repo_check_oid_exist(mgr, config, repo, "", oid_hash, error_msg, sizeof(error_msg));
+				int result = git_lfs_repo_check_oid_exist(mgr, config, repo, oid_hash, error_msg, sizeof(error_msg));
 				if(result < 0) {
 					struct json_object *error = create_json_error(400, "%s", error_msg);
 					json_object_object_add(obj_info, "error", error);
@@ -297,7 +253,10 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr, const struct g
 					json_object_object_add(upload, "href", json_object_new_string(url));
 					
 					struct json_object *header = json_object_new_object();
-					json_object_object_add(header, "Access-Token", json_object_new_string(access_token->token));
+					
+					char auth_header[64];
+					snprintf(auth_header, sizeof(auth_header), "Token %s", mgr->access_token);
+					json_object_object_add(header, "Authorization", json_object_new_string(auth_header));
 					json_object_object_add(upload, "header", header);
 
 					json_object_object_add(upload, "expires_at", json_object_new_string(expire_time));
@@ -313,7 +272,7 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr, const struct g
 			
 			case git_lfs_operation_download:
 			{
-				int result = git_lfs_repo_check_oid_exist(mgr, config, repo, "", oid_hash, error_msg, sizeof(error_msg));
+				int result = git_lfs_repo_check_oid_exist(mgr, config, repo, oid_hash, error_msg, sizeof(error_msg));
 				if(result < 0) {
 					struct json_object *error = create_json_error(400, "%s", error_msg);
 					json_object_object_add(obj_info, "error", error);
@@ -340,7 +299,9 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr, const struct g
 				json_object_object_add(download, "href", json_object_new_string(download_url));
 				
 				struct json_object *header = json_object_new_object();
-				json_object_object_add(header, "Access-Token", json_object_new_string(access_token->token));
+				char auth_header[64];
+				snprintf(auth_header, sizeof(auth_header), "Token %s", mgr->access_token);
+				json_object_object_add(header, "Authorization", json_object_new_string(auth_header));
 				json_object_object_add(download, "header", header);
 				
 				json_object_object_add(download, "expires_at", json_object_new_string(expire_time));
@@ -387,7 +348,11 @@ error0:
 	json_tokener_free(tokener);
 }
 
-static void git_lfs_download(struct repo_manager *mgr, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *oid)
+static void git_lfs_download(struct repo_manager *mgr,
+							 const struct git_lfs_config *config,
+							 const struct git_lfs_repo *repo,
+							 const struct socket_io *io,
+							 const char *oid)
 {
 	uint8_t oid_bytes[SHA256_DIGEST_LENGTH];
 	oid_from_string(oid, oid_bytes);
@@ -395,7 +360,7 @@ static void git_lfs_download(struct repo_manager *mgr, const struct git_lfs_conf
 	int fd;
 	long filesize;
 	char error_msg[128];
-	if(git_lfs_repo_get_read_oid_fd(mgr, config, repo, "", oid_bytes, &fd, &filesize, error_msg, sizeof(error_msg)) < 0) {
+	if(git_lfs_repo_get_read_oid_fd(mgr, config, repo, oid_bytes, &fd, &filesize, error_msg, sizeof(error_msg)) < 0) {
 		git_lfs_write_error(io, 400, "%s", error_msg);
 		return;
 	}
@@ -422,7 +387,11 @@ static void git_lfs_download(struct repo_manager *mgr, const struct git_lfs_conf
 	os_close(fd);
 }
 
-static void git_lfs_upload(struct repo_manager *mgr, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *oid)
+static void git_lfs_upload(struct repo_manager *mgr,
+						   const struct git_lfs_config *config,
+						   const struct git_lfs_repo *repo,
+						   const struct socket_io *io,
+						   const char *oid)
 {
 	uint8_t oid_bytes[SHA256_DIGEST_LENGTH];
 	oid_from_string(oid, oid_bytes);
@@ -430,7 +399,7 @@ static void git_lfs_upload(struct repo_manager *mgr, const struct git_lfs_config
 	uint32_t ticket;
 	int fd;
 	char error_msg[128];
-	if(git_lfs_repo_get_write_oid_fd(mgr, config, repo, "", oid_bytes, &fd, &ticket, error_msg, sizeof(error_msg)) < 0) {
+	if(git_lfs_repo_get_write_oid_fd(mgr, config, repo, oid_bytes, &fd, &ticket, error_msg, sizeof(error_msg)) < 0) {
 		git_lfs_write_error(io, 400, "%s", error_msg);
 		return;
 	}
@@ -453,7 +422,13 @@ static void git_lfs_upload(struct repo_manager *mgr, const struct git_lfs_config
 	io->write_headers(io->context, NULL, 0);
 }
 
-void git_lfs_server_handle_request(struct repo_manager *mgr, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *method, const char *end_point)
+void git_lfs_server_handle_request(struct repo_manager *mgr,
+								   const struct git_lfs_config *config,
+								   const struct git_lfs_repo *repo,
+								   const struct socket_io *io,
+								   const char *authorization_header,
+								   const char *method,
+								   const char *end_point)
 {
 	if(config->verbose >= 1)
 	{
@@ -465,6 +440,93 @@ void git_lfs_server_handle_request(struct repo_manager *mgr, const struct git_lf
 		strftime(currentTime, sizeof(currentTime), "%d/%b/%Y:%H:%M:%S %z", localtime(&now));
 
 		printf("%s %s %s\n", currentTime, method, end_point);
+	}
+
+	// authentication
+	if(repo->enable_authentication)
+	{
+		// if authentication header is not passed
+		if(!authorization_header)
+		{
+			char auth_header[512];
+			const char *auth_realm = "GIT-LFS Server";
+			if(repo->auth_realm)
+			{
+				auth_realm = repo->auth_realm;
+			}
+			
+			if(snprintf(auth_header, sizeof(auth_header), "WWW-Authenticate: Basic realm=\"%s\"", auth_realm) >= sizeof(auth_header))
+			{
+				git_lfs_write_error(io, 500, "Authentication line is too long.");
+				return;
+			}
+			
+			const char *headers[] =
+			{
+				auth_header,
+				"Content-Length: 0"
+			};
+			
+			io->write_http_status(io->context, 401, "Unauthorized");
+			io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
+			return;
+		}
+		
+		char auth_line[256];
+		if(strlcpy(auth_line, authorization_header, sizeof(auth_line)) >= sizeof(auth_line))
+		{
+			git_lfs_write_error(io, 500, "Authentication header is too long.");
+			return;
+		}
+		
+		char *p = auth_line;
+		const char *auth_type = strsep(&p, " ");
+		const char *auth_b64 = strsep(&p, "\r\n");
+		
+		if(!auth_type || !auth_b64)
+		{
+			git_lfs_write_error(io, 500, "Invalid authentication type.");
+			return;
+		}
+		
+		if(0 == strcmp("Token", auth_type))
+		{
+			strlcpy(mgr->access_token, auth_b64, sizeof(mgr->access_token));
+		}
+		else
+		{
+			if(0 != strcmp("Basic", auth_type))
+			{
+				git_lfs_write_error(io, 500, "Invalid authentication type.");
+				return;
+			}
+			
+			char decoded_b64[256];
+			int n = b64_pton(auth_b64, (uint8_t *)decoded_b64, sizeof(decoded_b64));
+			if(n < 0 || n >= sizeof(decoded_b64))
+			{
+				git_lfs_write_error(io, 500, "Invalid authentication. Authentication header error.");
+				return ;
+			}
+			decoded_b64[n] = 0;
+			
+			char *user_pass = decoded_b64;
+			const char *username = strsep(&user_pass, ":");
+			char *password = strsep(&user_pass, ":");
+			
+			if(!username || !password)
+			{
+				git_lfs_write_error(io, 500, "Invalid authentication. Authentication header error.");
+				return;
+			}
+			
+			int result = git_lfs_repo_authenticate(mgr, config, repo, username, password, mgr->access_token, sizeof(mgr->access_token), &mgr->access_token_expire, NULL, 0);
+			if(result <= 0)
+			{
+				git_lfs_write_error(io, 401, "Invalid credentials.");
+				return;
+			}
+		}
 	}
 
 	if(strcmp(method, "GET") == 0)

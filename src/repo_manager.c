@@ -89,6 +89,21 @@ static void git_lfs_cleanup_access_tokens()
 	}
 }
 
+static int git_lfs_verify_access_token(const char *access_token)
+{
+	struct git_lfs_access_token *token;
+	LIST_FOREACH(token, &access_token_list, entries)
+	{
+		if(time(NULL) < token->expire &&
+		   0 == strncmp(token->token, access_token, sizeof(token->token)))
+		{
+			return 1;
+		}
+	}
+	
+	return 0;
+}
+
 
 static struct git_lfs_repo * find_repo_by_id(const struct git_lfs_config *config, int id)
 {
@@ -119,6 +134,7 @@ void repo_manager_free(struct repo_manager *mgr)
 
 static int git_lfs_repo_send_request(struct repo_manager *mgr,
 									 enum repo_cmd_type type,
+									 const char *access_token,
 									 const void *req_data, size_t req_size,
 									 void *resp_data, size_t resp_size,
 									 int *fd,
@@ -139,6 +155,10 @@ static int git_lfs_repo_send_request(struct repo_manager *mgr,
 	req_cmd.magic = REPO_CMD_MAGIC;
 	req_cmd.cookie = rand();
 	req_cmd.type = type;
+	if(strlcpy(req_cmd.access_token, access_token, sizeof(req_cmd.access_token)) >= sizeof(req_cmd.access_token))
+	{
+		goto fail;
+	}
 	
 	// sends the request
 	if(socket_write_fully(mgr->socket, &req_cmd, sizeof(req_cmd)) != sizeof(req_cmd)) goto fail;
@@ -483,6 +503,15 @@ int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_
 			goto terminate;
 		}
 		
+		if(hdr.type != REPO_CMD_AUTH && hdr.type != REPO_CMD_TERMINATE)
+		{
+			if(!git_lfs_verify_access_token(hdr.access_token))
+			{
+				git_lfs_repo_send_error_response(mgr, hdr.cookie, "Invalid access token.");
+				continue;
+			}
+		}
+		
 		switch(hdr.type) {
 			case REPO_CMD_AUTH:
 				if(handle_cmd_auth(mgr, hdr.cookie, config) < 0) goto terminate;
@@ -585,6 +614,7 @@ int git_lfs_repo_authenticate(struct repo_manager *mgr,
 	
 	if(git_lfs_repo_send_request(mgr,
 								 REPO_CMD_AUTH,
+								 "",
 								 &request, sizeof(request),
 								 &response, sizeof(response),
 								 NULL,
@@ -602,7 +632,6 @@ int git_lfs_repo_authenticate(struct repo_manager *mgr,
 int git_lfs_repo_check_oid_exist(struct repo_manager *mgr,
 								 const struct git_lfs_config *config,
 								 const struct git_lfs_repo *repo,
-								 const char *auth,
 								 unsigned char oid[32],
 								 char *error_msg,
 								 size_t error_msg_buf_len)
@@ -616,6 +645,7 @@ int git_lfs_repo_check_oid_exist(struct repo_manager *mgr,
 	
 	if(git_lfs_repo_send_request(mgr,
 								 REPO_CMD_CHECK_OID_EXIST,
+								 mgr->access_token,
 								 &check_oid_req, sizeof(check_oid_req),
 								 &check_oid_resp, sizeof(check_oid_resp),
 								 NULL,
@@ -629,7 +659,6 @@ int git_lfs_repo_check_oid_exist(struct repo_manager *mgr,
 int git_lfs_repo_get_read_oid_fd(struct repo_manager *mgr,
 								 const struct git_lfs_config *config,
 								 const struct git_lfs_repo *repo,
-								 const char *auth,
 								 unsigned char oid[32],
 								 int *fd,
 								 long *size,
@@ -644,6 +673,7 @@ int git_lfs_repo_get_read_oid_fd(struct repo_manager *mgr,
 
 	if(git_lfs_repo_send_request(mgr,
 								 REPO_CMD_GET_OID,
+								 mgr->access_token,
 								 &request, sizeof(request),
 								 &response, sizeof(response),
 								 fd,
@@ -659,7 +689,6 @@ int git_lfs_repo_get_read_oid_fd(struct repo_manager *mgr,
 int git_lfs_repo_get_write_oid_fd(struct repo_manager *mgr,
 								  const struct git_lfs_config *config,
 								  const struct git_lfs_repo *repo,
-								  const char *auth,
 								  unsigned char oid[32],
 								  int *fd,
 								  uint32_t *ticket,
@@ -674,6 +703,7 @@ int git_lfs_repo_get_write_oid_fd(struct repo_manager *mgr,
 	
 	if(git_lfs_repo_send_request(mgr,
 								 REPO_CMD_PUT_OID,
+								 mgr->access_token,
 								 &request, sizeof(request),
 								 &response, sizeof(response),
 								 fd,
@@ -696,14 +726,15 @@ int git_lfs_repo_commit(struct repo_manager *mgr,
 	request.ticket = ticket;
 	
 	return git_lfs_repo_send_request(mgr,
-								 REPO_CMD_COMMIT,
-								 &request, sizeof(request),
-								 NULL, 0,
-								 NULL,
-								 error_msg, error_msg_buf_len);
+									 REPO_CMD_COMMIT,
+									 mgr->access_token,
+									 &request, sizeof(request),
+									 NULL, 0,
+									 NULL,
+									 error_msg, error_msg_buf_len);
 }
 
 int git_lfs_repo_terminate_service(struct repo_manager *mgr)
 {
-	return git_lfs_repo_send_request(mgr, REPO_CMD_TERMINATE, NULL, 0, NULL, 0, NULL, NULL, 0);
+	return git_lfs_repo_send_request(mgr, REPO_CMD_TERMINATE, "", NULL, 0, NULL, 0, NULL, NULL, 0);
 }

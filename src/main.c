@@ -137,7 +137,9 @@ int main(int argc, char *argv[])
 		}
 
 		os_close(fd[0]);
-		git_lfs_repo_manager_service(fd[1], config);
+		struct repo_manager *mgr = repo_manager_create(fd[1]);
+		git_lfs_repo_manager_service(mgr, config);
+		repo_manager_free(mgr);
 		os_close(fd[1]);
 	} else {
 		
@@ -158,7 +160,9 @@ int main(int argc, char *argv[])
 		}
 
 		os_close(fd[1]);
-		git_lfs_start_httpd(fd[0], config);
+		struct repo_manager *mgr = repo_manager_create(fd[0]);
+		git_lfs_start_httpd(mgr, config);
+		repo_manager_free(mgr);
 		os_close(fd[0]);
 	}
 error1:
