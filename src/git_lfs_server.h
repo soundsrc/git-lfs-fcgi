@@ -21,7 +21,7 @@ struct options;
 struct git_lfs_config;
 struct git_lfs_repo;
 
-void git_lfs_server_handle_request(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *method, const char *end_point);
+void git_lfs_server_handle_request(struct repo_manager *mgr, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *method, const char *end_point);
 void git_lfs_write_error(const struct socket_io *io, int error_code, const char *format, ...);
 
 #endif

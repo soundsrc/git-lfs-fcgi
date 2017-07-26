@@ -25,6 +25,7 @@
 #include "os/mutex.h"
 #include "os/threads.h"
 #include "git_lfs_server.h"
+#include "repo_manager.h"
 #include "socket_io.h"
 #include "configuration.h"
 
@@ -128,7 +129,7 @@ struct thread_info
 {
 	const struct git_lfs_config *config;
 	int listening_socket; // for fastcgi
-	int repo_socket;
+	struct repo_manager *repo_mgr;
 };
 
 static void handle_request(struct thread_info *info,
@@ -152,7 +153,7 @@ static void handle_request(struct thread_info *info,
 	if(repo) {
 		// TODO: read and authenticate
 		
-		git_lfs_server_handle_request(info->repo_socket, info->config, repo, io, request_method, end_point);
+		git_lfs_server_handle_request(info->repo_mgr, info->config, repo, io, request_method, end_point);
 	} else {
 		git_lfs_write_error(io, 404, "No repo at this URL.");
 	}
@@ -222,7 +223,7 @@ static void *fastcgi_handler_thread(void *data)
 }
 
 
-int git_lfs_start_httpd(int repo_socket, const struct git_lfs_config *config)
+int git_lfs_start_httpd(struct repo_manager *mgr, const struct git_lfs_config *config)
 {
 	if(!config->fastcgi_server) {
 		running_mutex = os_mutex_create();
@@ -244,7 +245,7 @@ int git_lfs_start_httpd(int repo_socket, const struct git_lfs_config *config)
 		
 		struct thread_info info;
 		info.config = config;
-		info.repo_socket = repo_socket;
+		info.repo_mgr = mgr;
 		
 		struct mg_context *context = mg_start(&callbacks, &info, mg_options);
 		if(!context) {
@@ -282,13 +283,13 @@ int git_lfs_start_httpd(int repo_socket, const struct git_lfs_config *config)
 		for(int i = 1; i < config->num_threads; i++) {
 			thread_infos[i].config = config;
 			thread_infos[i].listening_socket = listening_socket;
-			thread_infos[i].repo_socket = repo_socket;
+			thread_infos[i].repo_mgr = mgr;
 			os_thread_create(fastcgi_handler_thread, &thread_infos[i]);
 		}
 		
 		thread_infos[0].config = config;
 		thread_infos[0].listening_socket = listening_socket;
-		thread_infos[0].repo_socket = repo_socket;
+		thread_infos[0].repo_mgr = mgr;
 		fastcgi_handler_thread(&thread_infos[0]);
 		
 		os_mutex_destroy(accept_mutex);

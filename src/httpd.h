@@ -17,6 +17,7 @@
 #define HTTPD_H
 
 struct git_lfs_config;
-int git_lfs_start_httpd(int repo_socket, const struct git_lfs_config *config);
+struct repo_manager;
+int git_lfs_start_httpd(struct repo_manager *mgr, const struct git_lfs_config *config);
 
 #endif

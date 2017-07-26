@@ -105,7 +105,19 @@ static struct git_lfs_repo * find_repo_by_id(const struct git_lfs_config *config
 	return NULL;
 }
 
-static int git_lfs_repo_send_request(int socket,
+struct repo_manager *repo_manager_create(int socket)
+{
+	struct repo_manager *mgr = calloc(1, sizeof *mgr);
+	mgr->socket = socket;
+	return mgr;
+}
+
+void repo_manager_free(struct repo_manager *mgr)
+{
+	free(mgr);
+}
+
+static int git_lfs_repo_send_request(struct repo_manager *mgr,
 									 enum repo_cmd_type type,
 									 const void *req_data, size_t req_size,
 									 void *resp_data, size_t resp_size,
@@ -129,11 +141,11 @@ static int git_lfs_repo_send_request(int socket,
 	req_cmd.type = type;
 	
 	// sends the request
-	if(socket_write_fully(socket, &req_cmd, sizeof(req_cmd)) != sizeof(req_cmd)) goto fail;
-	if(req_size > 0 && socket_write_fully(socket, req_data, req_size) != req_size) goto fail;
+	if(socket_write_fully(mgr->socket, &req_cmd, sizeof(req_cmd)) != sizeof(req_cmd)) goto fail;
+	if(req_size > 0 && socket_write_fully(mgr->socket, req_data, req_size) != req_size) goto fail;
 	
 	// expect a reply
-	if(socket_read_fully(socket, &resp_cmd, sizeof(resp_cmd)) != sizeof(resp_cmd)) goto fail;
+	if(socket_read_fully(mgr->socket, &resp_cmd, sizeof(resp_cmd)) != sizeof(resp_cmd)) goto fail;
 	
 	if(resp_cmd.magic != REPO_CMD_MAGIC ||
 	   resp_cmd.cookie != req_cmd.cookie) {
@@ -142,7 +154,7 @@ static int git_lfs_repo_send_request(int socket,
 	
 	if(resp_cmd.type == REPO_CMD_ERROR) {
 		struct repo_cmd_error_response err_resp;
-		if(socket_read_fully(socket, &err_resp, sizeof(err_resp)) == sizeof(err_resp)) {
+		if(socket_read_fully(mgr->socket, &err_resp, sizeof(err_resp)) == sizeof(err_resp)) {
 			if(error_msg) {
 				err_resp.message[sizeof(err_resp.message) - 1] = 0;
 				strlcpy(error_msg, err_resp.message, error_msg_buf_size);
@@ -153,12 +165,12 @@ static int git_lfs_repo_send_request(int socket,
 	
 	if(resp_size > 0) {
 		if(fd) {
-			if(os_recv_with_file_descriptor(socket, resp_data, resp_size, fd) != resp_size)
+			if(os_recv_with_file_descriptor(mgr->socket, resp_data, resp_size, fd) != resp_size)
 			{
 				goto fail;
 			}
 		} else {
-			if(socket_read_fully(socket, resp_data, resp_size) != resp_size) goto fail;
+			if(socket_read_fully(mgr->socket, resp_data, resp_size) != resp_size) goto fail;
 		}
 	}
 	
@@ -168,7 +180,7 @@ fail:
 	return ret;
 }
 
-static int git_lfs_repo_send_response(int socket,
+static int git_lfs_repo_send_response(struct repo_manager *mgr,
 									  enum repo_cmd_type type,
 									  uint32_t cookie,
 									  void *resp_data, size_t resp_size,
@@ -179,16 +191,16 @@ static int git_lfs_repo_send_response(int socket,
 	hdr.cookie = cookie;
 	hdr.type = type;
 
-	if(socket_write_fully(socket, &hdr, sizeof(hdr)) != sizeof(hdr)) {
+	if(socket_write_fully(mgr->socket, &hdr, sizeof(hdr)) != sizeof(hdr)) {
 		return -1;
 	}
 	
 	if(fd) {
-		if(os_send_with_file_descriptor(socket, resp_data, resp_size, fd) != resp_size) {
+		if(os_send_with_file_descriptor(mgr->socket, resp_data, resp_size, fd) != resp_size) {
 			return -1;
 		}
 	} else {
-		if(socket_write_fully(socket, resp_data, resp_size) != resp_size) {
+		if(socket_write_fully(mgr->socket, resp_data, resp_size) != resp_size) {
 			return -1;
 		}
 	}
@@ -196,7 +208,7 @@ static int git_lfs_repo_send_response(int socket,
 	return 0;
 }
 
-static int git_lfs_repo_send_error_response(int socket, uint32_t cookie, const char *msg, ...)
+static int git_lfs_repo_send_error_response(struct repo_manager *mgr, uint32_t cookie, const char *msg, ...)
 {
 	struct repo_cmd_error_response err_resp;
 	
@@ -205,10 +217,10 @@ static int git_lfs_repo_send_error_response(int socket, uint32_t cookie, const c
 	vsnprintf(err_resp.message, sizeof(err_resp.message), msg, va);
 	va_end(va);
 	
-	return git_lfs_repo_send_response(socket, REPO_CMD_ERROR, cookie, &err_resp, sizeof(err_resp), NULL);
+	return git_lfs_repo_send_response(mgr, REPO_CMD_ERROR, cookie, &err_resp, sizeof(err_resp), NULL);
 }
 
-static int handle_cmd_auth(int socket, uint32_t cookie, const struct git_lfs_config *config)
+static int handle_cmd_auth(struct repo_manager *mgr, uint32_t cookie, const struct git_lfs_config *config)
 {
 	struct repo_cmd_auth_request request;
 	struct repo_cmd_auth_response response;
@@ -216,7 +228,7 @@ static int handle_cmd_auth(int socket, uint32_t cookie, const struct git_lfs_con
 	memset(&request, 0, sizeof(request));
 	memset(&response, 0, sizeof(response));
 
-	if(socket_read_fully(socket, &request, sizeof(request)) != sizeof(request))
+	if(socket_read_fully(mgr->socket, &request, sizeof(request)) != sizeof(request))
 	{
 		return -1;
 	}
@@ -234,7 +246,7 @@ static int handle_cmd_auth(int socket, uint32_t cookie, const struct git_lfs_con
 	
 	struct git_lfs_repo *repo = find_repo_by_id(config, request.repo_id);
 	if(!repo) {
-		git_lfs_repo_send_error_response(socket, cookie, "Invalid repo id.");
+		git_lfs_repo_send_error_response(mgr, cookie, "Invalid repo id.");
 		return 0;
 	}
 	
@@ -247,16 +259,16 @@ static int handle_cmd_auth(int socket, uint32_t cookie, const struct git_lfs_con
 		strlcpy(response.access_token, token->token, sizeof(response.access_token));
 	}
 	
-	return git_lfs_repo_send_response(socket, REPO_CMD_AUTH, cookie, &response, sizeof(response), NULL);
+	return git_lfs_repo_send_response(mgr, REPO_CMD_AUTH, cookie, &response, sizeof(response), NULL);
 }
 
-static int handle_cmd_check_oid(int socket, uint32_t cookie, const char *path)
+static int handle_cmd_check_oid(struct repo_manager *mgr, uint32_t cookie, const char *path)
 {
 	struct repo_cmd_check_oid_response resp;
 	memset(&resp, 0, sizeof(resp));
 	
 	resp.exist = os_file_exists(path);
-	if(git_lfs_repo_send_response(socket, REPO_CMD_CHECK_OID_EXIST, cookie, &resp, sizeof(resp), NULL) < 0)
+	if(git_lfs_repo_send_response(mgr, REPO_CMD_CHECK_OID_EXIST, cookie, &resp, sizeof(resp), NULL) < 0)
 	{
 		return -1;
 	}
@@ -264,7 +276,7 @@ static int handle_cmd_check_oid(int socket, uint32_t cookie, const char *path)
 	return 0;
 }
 
-static int handle_cmd_get_oid(int socket, uint32_t cookie, const char *path, const char *oid_str)
+static int handle_cmd_get_oid(struct repo_manager *mgr, uint32_t cookie, const char *path, const char *oid_str)
 {
 	struct repo_cmd_get_oid_response resp;
 	memset(&resp, 0, sizeof(resp));
@@ -272,13 +284,13 @@ static int handle_cmd_get_oid(int socket, uint32_t cookie, const char *path, con
 	int fd = os_open_read(path);
 	if(fd < 0)
 	{
-		git_lfs_repo_send_error_response(socket, cookie, "Object %s does not exist.", oid_str);
+		git_lfs_repo_send_error_response(mgr, cookie, "Object %s does not exist.", oid_str);
 		return 0;
 	}
 	
 	resp.content_length = os_file_size(path);
 	
-	if(git_lfs_repo_send_response(socket, REPO_CMD_GET_OID, cookie, &resp, sizeof(resp), fd) < 0)
+	if(git_lfs_repo_send_response(mgr, REPO_CMD_GET_OID, cookie, &resp, sizeof(resp), fd) < 0)
 	{
 		os_close(fd);
 		return -1;
@@ -288,7 +300,7 @@ static int handle_cmd_get_oid(int socket, uint32_t cookie, const char *path, con
 	return 0;
 }
 
-static int handle_cmd_put_oid(int socket,
+static int handle_cmd_put_oid(struct repo_manager *mgr,
 							  uint32_t cookie,
 							  struct git_lfs_repo *repo,
 							  const uint8_t *oid,
@@ -305,7 +317,7 @@ static int handle_cmd_put_oid(int socket,
 	char tmp_dir[PATH_MAX];
 	if(snprintf(tmp_dir, sizeof(tmp_dir), "%s/tmp", repo->root_dir) >= sizeof(tmp_dir))
 	{
-		git_lfs_repo_send_error_response(socket, cookie, "Repo root directory is too long.");
+		git_lfs_repo_send_error_response(mgr, cookie, "Repo root directory is too long.");
 		return 0;
 	}
 	
@@ -313,7 +325,7 @@ static int handle_cmd_put_oid(int socket,
 	{
 		if(os_mkdir(tmp_dir, 0700) < 0)
 		{
-			git_lfs_repo_send_error_response(socket, cookie, "Fail to create tmp directory.");
+			git_lfs_repo_send_error_response(mgr, cookie, "Fail to create tmp directory.");
 			return 0;
 		}
 	}
@@ -326,21 +338,21 @@ static int handle_cmd_put_oid(int socket,
 	if(snprintf(upload->tmp_path, sizeof(upload->tmp_path), "%s/XXXXXX", tmp_dir) >= sizeof(upload->tmp_path))
 	{
 		free(upload);
-		git_lfs_repo_send_error_response(socket, cookie, "Temp path is too long.");
+		git_lfs_repo_send_error_response(mgr, cookie, "Temp path is too long.");
 		return 0;
 	}
 	
 	int fd = os_mkstemp(upload->tmp_path);
 	if(fd < 0) {
 		free(upload);
-		git_lfs_repo_send_error_response(socket, cookie, "Object %s could not be created. Failed to create tmp file.", oid_str);
+		git_lfs_repo_send_error_response(mgr, cookie, "Object %s could not be created. Failed to create tmp file.", oid_str);
 		return 0;
 	}
 	
 	LIST_INSERT_HEAD(&upload_list, upload, entries);
 	
 	resp.ticket = upload->id;
-	if(git_lfs_repo_send_response(socket, REPO_CMD_PUT_OID, cookie, &resp, sizeof(resp), fd) < 0)
+	if(git_lfs_repo_send_response(mgr, REPO_CMD_PUT_OID, cookie, &resp, sizeof(resp), fd) < 0)
 	{
 		os_close(fd);
 		return -1;
@@ -351,10 +363,10 @@ static int handle_cmd_put_oid(int socket,
 	return 0;
 }
 
-static int handle_cmd_commit(int socket, uint32_t cookie, const struct git_lfs_config *config)
+static int handle_cmd_commit(struct repo_manager *mgr, uint32_t cookie, const struct git_lfs_config *config)
 {
 	struct repo_cmd_commit_request request;
-	if(socket_read_fully(socket, &request, sizeof(request)) != sizeof(request))
+	if(socket_read_fully(mgr->socket, &request, sizeof(request)) != sizeof(request))
 	{
 		return -1;
 	}
@@ -371,7 +383,7 @@ static int handle_cmd_commit(int socket, uint32_t cookie, const struct git_lfs_c
 	
 	if(!upload)
 	{
-		git_lfs_repo_send_error_response(socket, cookie, "Invalid upload ticket.");
+		git_lfs_repo_send_error_response(mgr, cookie, "Invalid upload ticket.");
 		return 0;
 	}
 	
@@ -382,7 +394,7 @@ static int handle_cmd_commit(int socket, uint32_t cookie, const struct git_lfs_c
 	
 	if(snprintf(dest_path, sizeof(dest_path), "%s/%.2s/", upload->repo->root_dir, oid_str) >= sizeof(dest_path))
 	{
-		git_lfs_repo_send_error_response(socket, cookie, "Object %s could not be created. Path too long.", oid_str);
+		git_lfs_repo_send_error_response(mgr, cookie, "Object %s could not be created. Path too long.", oid_str);
 		return 0;
 	}
 	
@@ -390,14 +402,14 @@ static int handle_cmd_commit(int socket, uint32_t cookie, const struct git_lfs_c
 	{
 		if(os_mkdir(dest_path, 0700) < 0)
 		{
-			git_lfs_repo_send_error_response(socket, cookie, "Object %s could not be created. Invalid path.", oid_str);
+			git_lfs_repo_send_error_response(mgr, cookie, "Object %s could not be created. Invalid path.", oid_str);
 			return 0;
 		}
 	}
 	
 	if(strlcat(dest_path, oid_str, sizeof(dest_path)) >= sizeof(dest_path))
 	{
-		git_lfs_repo_send_error_response(socket, cookie, "Object %s could not be created. Path too long.", oid_str);
+		git_lfs_repo_send_error_response(mgr, cookie, "Object %s could not be created. Path too long.", oid_str);
 		return 0;
 	}
 	
@@ -408,7 +420,7 @@ static int handle_cmd_commit(int socket, uint32_t cookie, const struct git_lfs_c
 		char buffer[4096];
 		if(fd < 0)
 		{
-			git_lfs_repo_send_error_response(socket, cookie, "Unable to open written file for object %s.", oid_str);
+			git_lfs_repo_send_error_response(mgr, cookie, "Unable to open written file for object %s.", oid_str);
 			return 0;
 		}
 		
@@ -427,7 +439,7 @@ static int handle_cmd_commit(int socket, uint32_t cookie, const struct git_lfs_c
 		{
 			char actual_hash_str[65];
 			oid_to_string(sha256, actual_hash_str);
-			git_lfs_repo_send_error_response(socket, cookie, "Object %s failed verification. Unexpected hash %s.", oid_str, actual_hash_str);
+			git_lfs_repo_send_error_response(mgr, cookie, "Object %s failed verification. Unexpected hash %s.", oid_str, actual_hash_str);
 			
 			LIST_REMOVE(upload, entries);
 			
@@ -439,7 +451,7 @@ static int handle_cmd_commit(int socket, uint32_t cookie, const struct git_lfs_c
 		
 		if(os_rename(upload->tmp_path, dest_path) < 0)
 		{
-			git_lfs_repo_send_error_response(socket, cookie, "Object %s failed rename.", oid_str);
+			git_lfs_repo_send_error_response(mgr, cookie, "Object %s failed rename.", oid_str);
 			return 0;
 		}
 		
@@ -448,7 +460,7 @@ static int handle_cmd_commit(int socket, uint32_t cookie, const struct git_lfs_c
 		free(upload);
 	}
 	
-	if(git_lfs_repo_send_response(socket, REPO_CMD_COMMIT, cookie, NULL, 0, NULL) < 0)
+	if(git_lfs_repo_send_response(mgr, REPO_CMD_COMMIT, cookie, NULL, 0, NULL) < 0)
 	{
 		return -1;
 	}
@@ -456,12 +468,12 @@ static int handle_cmd_commit(int socket, uint32_t cookie, const struct git_lfs_c
 	return 0;
 }
 
-int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config)
+int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_config *config)
 {
 	int ret = -1;
 	for(;;) {
 		struct repo_cmd_header hdr;
-		if(socket_read_fully(socket, &hdr, sizeof(hdr)) != sizeof(hdr))
+		if(socket_read_fully(mgr->socket, &hdr, sizeof(hdr)) != sizeof(hdr))
 		{
 			goto terminate;
 		}
@@ -473,20 +485,20 @@ int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config
 		
 		switch(hdr.type) {
 			case REPO_CMD_AUTH:
-				if(handle_cmd_auth(socket, hdr.cookie, config) < 0) goto terminate;
+				if(handle_cmd_auth(mgr, hdr.cookie, config) < 0) goto terminate;
 				break;
 			case REPO_CMD_CHECK_OID_EXIST:
 			case REPO_CMD_GET_OID:
 			case REPO_CMD_PUT_OID:
 			{
 				struct repo_oid_cmd_data data;
-				if(socket_read_fully(socket, &data, sizeof(data)) != sizeof(data)) {
+				if(socket_read_fully(mgr->socket, &data, sizeof(data)) != sizeof(data)) {
 					goto terminate;
 				}
 				
 				struct git_lfs_repo *repo = find_repo_by_id(config, data.repo_id);
 				if(!repo) {
-					git_lfs_repo_send_response(socket, REPO_CMD_ERROR, hdr.cookie, NULL, 0, NULL);
+					git_lfs_repo_send_response(mgr, REPO_CMD_ERROR, hdr.cookie, NULL, 0, NULL);
 					continue;
 				}
 			
@@ -494,30 +506,30 @@ int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config
 				char oid_str[65];
 				oid_to_string(data.oid, oid_str);
 				if(snprintf(path, sizeof(path), "%s/%.2s/%s", repo->root_dir, oid_str, oid_str) >= sizeof(path)) {
-					git_lfs_repo_send_error_response(socket, hdr.cookie, "Unable to get object. Path is too long.");
+					git_lfs_repo_send_error_response(mgr, hdr.cookie, "Unable to get object. Path is too long.");
 					continue;
 				}
 				
 				switch(hdr.type) {
 					default: break;
 					case REPO_CMD_CHECK_OID_EXIST:
-						if(handle_cmd_check_oid(socket, hdr.cookie, path) < 0) goto terminate;
+						if(handle_cmd_check_oid(mgr, hdr.cookie, path) < 0) goto terminate;
 						break;
 					case REPO_CMD_GET_OID:
-						if(handle_cmd_get_oid(socket, hdr.cookie, path, oid_str) < 0) goto terminate;
+						if(handle_cmd_get_oid(mgr, hdr.cookie, path, oid_str) < 0) goto terminate;
 						break;
 					case REPO_CMD_PUT_OID:
-						if(handle_cmd_put_oid(socket, hdr.cookie, repo, data.oid, path) < 0) goto terminate;
+						if(handle_cmd_put_oid(mgr, hdr.cookie, repo, data.oid, path) < 0) goto terminate;
 						break;
 					
 				}
 			}
 				break;
 			case REPO_CMD_COMMIT:
-				handle_cmd_commit(socket, hdr.cookie, config);
+				handle_cmd_commit(mgr, hdr.cookie, config);
 				break;
 			case REPO_CMD_TERMINATE:
-				git_lfs_repo_send_response(socket, REPO_CMD_TERMINATE, hdr.cookie, NULL, 0, NULL);
+				git_lfs_repo_send_response(mgr, REPO_CMD_TERMINATE, hdr.cookie, NULL, 0, NULL);
 				goto terminate;
 				break;
 			default:
@@ -540,7 +552,7 @@ terminate:;
 	return ret;
 }
 
-int git_lfs_repo_authenticate(int socket,
+int git_lfs_repo_authenticate(struct repo_manager *mgr,
 							  const struct git_lfs_config *config,
 							  const struct git_lfs_repo *repo,
 							  const char *username,
@@ -571,7 +583,7 @@ int git_lfs_repo_authenticate(int socket,
 		return -1;
 	}
 	
-	if(git_lfs_repo_send_request(socket,
+	if(git_lfs_repo_send_request(mgr,
 								 REPO_CMD_AUTH,
 								 &request, sizeof(request),
 								 &response, sizeof(response),
@@ -587,7 +599,7 @@ int git_lfs_repo_authenticate(int socket,
 	return response.success;
 }
 
-int git_lfs_repo_check_oid_exist(int socket,
+int git_lfs_repo_check_oid_exist(struct repo_manager *mgr,
 								 const struct git_lfs_config *config,
 								 const struct git_lfs_repo *repo,
 								 const char *auth,
@@ -602,7 +614,7 @@ int git_lfs_repo_check_oid_exist(int socket,
 
 	struct repo_cmd_check_oid_response check_oid_resp;
 	
-	if(git_lfs_repo_send_request(socket,
+	if(git_lfs_repo_send_request(mgr,
 								 REPO_CMD_CHECK_OID_EXIST,
 								 &check_oid_req, sizeof(check_oid_req),
 								 &check_oid_resp, sizeof(check_oid_resp),
@@ -614,7 +626,7 @@ int git_lfs_repo_check_oid_exist(int socket,
 	return check_oid_resp.exist;
 }
 
-int git_lfs_repo_get_read_oid_fd(int socket,
+int git_lfs_repo_get_read_oid_fd(struct repo_manager *mgr,
 								 const struct git_lfs_config *config,
 								 const struct git_lfs_repo *repo,
 								 const char *auth,
@@ -630,7 +642,7 @@ int git_lfs_repo_get_read_oid_fd(int socket,
 	request.repo_id = repo->id;
 	memcpy(request.oid, oid, sizeof(request.oid));
 
-	if(git_lfs_repo_send_request(socket,
+	if(git_lfs_repo_send_request(mgr,
 								 REPO_CMD_GET_OID,
 								 &request, sizeof(request),
 								 &response, sizeof(response),
@@ -644,7 +656,7 @@ int git_lfs_repo_get_read_oid_fd(int socket,
 	return 0;
 }
 
-int git_lfs_repo_get_write_oid_fd(int socket,
+int git_lfs_repo_get_write_oid_fd(struct repo_manager *mgr,
 								  const struct git_lfs_config *config,
 								  const struct git_lfs_repo *repo,
 								  const char *auth,
@@ -660,7 +672,7 @@ int git_lfs_repo_get_write_oid_fd(int socket,
 	request.repo_id = repo->id;
 	memcpy(request.oid, oid, sizeof(request.oid));
 	
-	if(git_lfs_repo_send_request(socket,
+	if(git_lfs_repo_send_request(mgr,
 								 REPO_CMD_PUT_OID,
 								 &request, sizeof(request),
 								 &response, sizeof(response),
@@ -674,7 +686,7 @@ int git_lfs_repo_get_write_oid_fd(int socket,
 	return 0;
 }
 
-int git_lfs_repo_commit(int socket,
+int git_lfs_repo_commit(struct repo_manager *mgr,
 						uint32_t ticket,
 						char *error_msg,
 						size_t error_msg_buf_len)
@@ -683,7 +695,7 @@ int git_lfs_repo_commit(int socket,
 	memset(&request, 0, sizeof(request));
 	request.ticket = ticket;
 	
-	return git_lfs_repo_send_request(socket,
+	return git_lfs_repo_send_request(mgr,
 								 REPO_CMD_COMMIT,
 								 &request, sizeof(request),
 								 NULL, 0,
@@ -691,7 +703,7 @@ int git_lfs_repo_commit(int socket,
 								 error_msg, error_msg_buf_len);
 }
 
-int git_lfs_repo_terminate_service(int socket)
+int git_lfs_repo_terminate_service(struct repo_manager *mgr)
 {
-	return git_lfs_repo_send_request(socket, REPO_CMD_TERMINATE, NULL, 0, NULL, 0, NULL, NULL, 0);
+	return git_lfs_repo_send_request(mgr, REPO_CMD_TERMINATE, NULL, 0, NULL, 0, NULL, NULL, 0);
 }

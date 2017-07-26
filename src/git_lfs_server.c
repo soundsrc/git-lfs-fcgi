@@ -139,7 +139,7 @@ static struct json_object *create_json_error(int error_code, const char *format,
 	return error;
 }
 
-static void git_lfs_server_handle_batch(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io)
+static void git_lfs_server_handle_batch(struct repo_manager *mgr, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io)
 {
 	char buffer[4096];
 	int n;
@@ -273,7 +273,7 @@ static void git_lfs_server_handle_batch(int socket, const struct git_lfs_config 
 		switch(op) {
 			case git_lfs_operation_upload:
 			{
-				int result = git_lfs_repo_check_oid_exist(socket, config, repo, "", oid_hash, error_msg, sizeof(error_msg));
+				int result = git_lfs_repo_check_oid_exist(mgr, config, repo, "", oid_hash, error_msg, sizeof(error_msg));
 				if(result < 0) {
 					struct json_object *error = create_json_error(400, "%s", error_msg);
 					json_object_object_add(obj_info, "error", error);
@@ -313,7 +313,7 @@ static void git_lfs_server_handle_batch(int socket, const struct git_lfs_config 
 			
 			case git_lfs_operation_download:
 			{
-				int result = git_lfs_repo_check_oid_exist(socket, config, repo, "", oid_hash, error_msg, sizeof(error_msg));
+				int result = git_lfs_repo_check_oid_exist(mgr, config, repo, "", oid_hash, error_msg, sizeof(error_msg));
 				if(result < 0) {
 					struct json_object *error = create_json_error(400, "%s", error_msg);
 					json_object_object_add(obj_info, "error", error);
@@ -387,7 +387,7 @@ error0:
 	json_tokener_free(tokener);
 }
 
-static void git_lfs_download(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *oid)
+static void git_lfs_download(struct repo_manager *mgr, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *oid)
 {
 	uint8_t oid_bytes[SHA256_DIGEST_LENGTH];
 	oid_from_string(oid, oid_bytes);
@@ -395,7 +395,7 @@ static void git_lfs_download(int socket, const struct git_lfs_config *config, co
 	int fd;
 	long filesize;
 	char error_msg[128];
-	if(git_lfs_repo_get_read_oid_fd(socket, config, repo, "", oid_bytes, &fd, &filesize, error_msg, sizeof(error_msg)) < 0) {
+	if(git_lfs_repo_get_read_oid_fd(mgr, config, repo, "", oid_bytes, &fd, &filesize, error_msg, sizeof(error_msg)) < 0) {
 		git_lfs_write_error(io, 400, "%s", error_msg);
 		return;
 	}
@@ -422,7 +422,7 @@ static void git_lfs_download(int socket, const struct git_lfs_config *config, co
 	os_close(fd);
 }
 
-static void git_lfs_upload(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *oid)
+static void git_lfs_upload(struct repo_manager *mgr, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *oid)
 {
 	uint8_t oid_bytes[SHA256_DIGEST_LENGTH];
 	oid_from_string(oid, oid_bytes);
@@ -430,7 +430,7 @@ static void git_lfs_upload(int socket, const struct git_lfs_config *config, cons
 	uint32_t ticket;
 	int fd;
 	char error_msg[128];
-	if(git_lfs_repo_get_write_oid_fd(socket, config, repo, "", oid_bytes, &fd, &ticket, error_msg, sizeof(error_msg)) < 0) {
+	if(git_lfs_repo_get_write_oid_fd(mgr, config, repo, "", oid_bytes, &fd, &ticket, error_msg, sizeof(error_msg)) < 0) {
 		git_lfs_write_error(io, 400, "%s", error_msg);
 		return;
 	}
@@ -444,7 +444,7 @@ static void git_lfs_upload(int socket, const struct git_lfs_config *config, cons
 	os_close(fd);
 	
 	// commit
-	if(git_lfs_repo_commit(socket, ticket, error_msg, sizeof(error_msg)) < 0) {
+	if(git_lfs_repo_commit(mgr, ticket, error_msg, sizeof(error_msg)) < 0) {
 		git_lfs_write_error(io, 400, "%s", error_msg);
 		return;
 	}
@@ -453,7 +453,7 @@ static void git_lfs_upload(int socket, const struct git_lfs_config *config, cons
 	io->write_headers(io->context, NULL, 0);
 }
 
-void git_lfs_server_handle_request(int socket, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *method, const char *end_point)
+void git_lfs_server_handle_request(struct repo_manager *mgr, const struct git_lfs_config *config, const struct git_lfs_repo *repo, const struct socket_io *io, const char *method, const char *end_point)
 {
 	if(config->verbose >= 1)
 	{
@@ -470,7 +470,7 @@ void git_lfs_server_handle_request(int socket, const struct git_lfs_config *conf
 	if(strcmp(method, "GET") == 0)
 	{
 		if(strncmp(end_point, "/download/", 10) == 0) {
-			git_lfs_download(socket, config, repo, io, end_point + 10);
+			git_lfs_download(mgr, config, repo, io, end_point + 10);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
@@ -478,7 +478,7 @@ void git_lfs_server_handle_request(int socket, const struct git_lfs_config *conf
 	} else if(strcmp(method, "PUT") == 0) {
 		
 		if(strncmp(end_point, "/upload/", 8) == 0) {
-			git_lfs_upload(socket, config, repo, io, end_point + 8);
+			git_lfs_upload(mgr, config, repo, io, end_point + 8);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
@@ -488,7 +488,7 @@ void git_lfs_server_handle_request(int socket, const struct git_lfs_config *conf
 		// v1 batch
 		if(strcmp(end_point, "/objects/batch") == 0)
 		{
-			git_lfs_server_handle_batch(socket, config, repo, io);
+			git_lfs_server_handle_batch(mgr, config, repo, io);
 		} else {
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
