@@ -32,4 +32,8 @@ char *strndup(const char *str, size_t maxlen);
 #include <string.h>
 #endif
 
+#if !defined(__OpenBSD__)
+void explicit_bzero(void *buf, size_t len);
+#endif
+
 #endif
