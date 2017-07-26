@@ -250,6 +250,212 @@ static int handle_cmd_auth(int socket, uint32_t cookie, const struct git_lfs_con
 	return git_lfs_repo_send_response(socket, REPO_CMD_AUTH, cookie, &response, sizeof(response), NULL);
 }
 
+static int handle_cmd_check_oid(int socket, uint32_t cookie, const char *path)
+{
+	struct repo_cmd_check_oid_response resp;
+	memset(&resp, 0, sizeof(resp));
+	
+	resp.exist = os_file_exists(path);
+	if(git_lfs_repo_send_response(socket, REPO_CMD_CHECK_OID_EXIST, cookie, &resp, sizeof(resp), NULL) < 0)
+	{
+		return -1;
+	}
+	
+	return 0;
+}
+
+static int handle_cmd_get_oid(int socket, uint32_t cookie, const char *path, const char *oid_str)
+{
+	struct repo_cmd_get_oid_response resp;
+	memset(&resp, 0, sizeof(resp));
+	
+	int fd = os_open_read(path);
+	if(fd < 0)
+	{
+		git_lfs_repo_send_error_response(socket, cookie, "Object %s does not exist.", oid_str);
+		return 0;
+	}
+	
+	resp.content_length = os_file_size(path);
+	
+	if(git_lfs_repo_send_response(socket, REPO_CMD_GET_OID, cookie, &resp, sizeof(resp), fd) < 0)
+	{
+		os_close(fd);
+		return -1;
+	}
+	
+	os_close(fd);
+	return 0;
+}
+
+static int handle_cmd_put_oid(int socket,
+							  uint32_t cookie,
+							  struct git_lfs_repo *repo,
+							  const uint8_t *oid,
+							  const char *path)
+{
+	char oid_str[65];
+	
+	oid_to_string(oid, oid_str);
+
+	struct repo_cmd_put_oid_response resp;
+	memset(&resp, 0, sizeof(resp));
+	
+	// create the directory if it does not exist
+	char tmp_dir[PATH_MAX];
+	if(snprintf(tmp_dir, sizeof(tmp_dir), "%s/tmp", repo->root_dir) >= sizeof(tmp_dir))
+	{
+		git_lfs_repo_send_error_response(socket, cookie, "Repo root directory is too long.");
+		return 0;
+	}
+	
+	if(!os_is_directory(tmp_dir))
+	{
+		if(os_mkdir(tmp_dir, 0700) < 0)
+		{
+			git_lfs_repo_send_error_response(socket, cookie, "Fail to create tmp directory.");
+			return 0;
+		}
+	}
+	
+	struct upload_entry *upload = calloc(1, sizeof *upload);
+	upload->repo = repo;
+	upload->id = next_upload_id++;
+	memcpy(upload->oid, oid, sizeof(upload->oid));
+	
+	if(snprintf(upload->tmp_path, sizeof(upload->tmp_path), "%s/XXXXXX", tmp_dir) >= sizeof(upload->tmp_path))
+	{
+		free(upload);
+		git_lfs_repo_send_error_response(socket, cookie, "Temp path is too long.");
+		return 0;
+	}
+	
+	int fd = os_mkstemp(upload->tmp_path);
+	if(fd < 0) {
+		free(upload);
+		git_lfs_repo_send_error_response(socket, cookie, "Object %s could not be created. Failed to create tmp file.", oid_str);
+		return 0;
+	}
+	
+	LIST_INSERT_HEAD(&upload_list, upload, entries);
+	
+	resp.ticket = upload->id;
+	if(git_lfs_repo_send_response(socket, REPO_CMD_PUT_OID, cookie, &resp, sizeof(resp), fd) < 0)
+	{
+		os_close(fd);
+		return -1;
+	}
+	
+	os_close(fd);
+	
+	return 0;
+}
+
+static int handle_cmd_commit(int socket, uint32_t cookie, const struct git_lfs_config *config)
+{
+	struct repo_cmd_commit_request request;
+	if(socket_read_fully(socket, &request, sizeof(request)) != sizeof(request))
+	{
+		return -1;
+	}
+	
+	struct upload_entry *up, *upload = NULL;
+	LIST_FOREACH(up, &upload_list, entries)
+	{
+		if(up->id == request.ticket)
+		{
+			upload = up;
+			break;
+		}
+	}
+	
+	if(!upload)
+	{
+		git_lfs_repo_send_error_response(socket, cookie, "Invalid upload ticket.");
+		return 0;
+	}
+	
+	char oid_str[65];
+	char dest_path[PATH_MAX];
+	
+	oid_to_string(upload->oid, oid_str);
+	
+	if(snprintf(dest_path, sizeof(dest_path), "%s/%.2s/", upload->repo->root_dir, oid_str) >= sizeof(dest_path))
+	{
+		git_lfs_repo_send_error_response(socket, cookie, "Object %s could not be created. Path too long.", oid_str);
+		return 0;
+	}
+	
+	if(!os_is_directory(dest_path))
+	{
+		if(os_mkdir(dest_path, 0700) < 0)
+		{
+			git_lfs_repo_send_error_response(socket, cookie, "Object %s could not be created. Invalid path.", oid_str);
+			return 0;
+		}
+	}
+	
+	if(strlcat(dest_path, oid_str, sizeof(dest_path)) >= sizeof(dest_path))
+	{
+		git_lfs_repo_send_error_response(socket, cookie, "Object %s could not be created. Path too long.", oid_str);
+		return 0;
+	}
+	
+	if(config->verify_upload)
+	{
+		int fd = os_open_read(upload->tmp_path);
+		int n;
+		char buffer[4096];
+		if(fd < 0)
+		{
+			git_lfs_repo_send_error_response(socket, cookie, "Unable to open written file for object %s.", oid_str);
+			return 0;
+		}
+		
+		SHA256_CTX ctx;
+		SHA256_Init(&ctx);
+		while((n = os_read(fd, buffer, sizeof(buffer))) > 0)
+		{
+			SHA256_Update(&ctx, buffer, n);
+		}
+		os_close(fd);
+		
+		unsigned char sha256[SHA256_DIGEST_LENGTH];
+		SHA256_Final(sha256, &ctx);
+		
+		if(memcmp(upload->oid, sha256, SHA256_DIGEST_LENGTH) != 0)
+		{
+			char actual_hash_str[65];
+			oid_to_string(sha256, actual_hash_str);
+			git_lfs_repo_send_error_response(socket, cookie, "Object %s failed verification. Unexpected hash %s.", oid_str, actual_hash_str);
+			
+			LIST_REMOVE(upload, entries);
+			
+			os_unlink(upload->tmp_path);
+			free(upload);
+			
+			return 0;
+		}
+		
+		if(os_rename(upload->tmp_path, dest_path) < 0)
+		{
+			git_lfs_repo_send_error_response(socket, cookie, "Object %s failed rename.", oid_str);
+			return 0;
+		}
+		
+		LIST_REMOVE(upload, entries);
+		os_unlink(upload->tmp_path);
+		free(upload);
+	}
+	
+	if(git_lfs_repo_send_response(socket, REPO_CMD_COMMIT, cookie, NULL, 0, NULL) < 0)
+	{
+		return -1;
+	}
+	
+	return 0;
+}
+
 int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config)
 {
 	int ret = -1;
@@ -267,7 +473,7 @@ int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config
 		
 		switch(hdr.type) {
 			case REPO_CMD_AUTH:
-				handle_cmd_auth(socket, hdr.cookie, config);
+				if(handle_cmd_auth(socket, hdr.cookie, config) < 0) goto terminate;
 				break;
 			case REPO_CMD_CHECK_OID_EXIST:
 			case REPO_CMD_GET_OID:
@@ -295,196 +501,21 @@ int git_lfs_repo_manager_service(int socket, const struct git_lfs_config *config
 				switch(hdr.type) {
 					default: break;
 					case REPO_CMD_CHECK_OID_EXIST:
-					{
-						struct repo_cmd_check_oid_response resp;
-						memset(&resp, 0, sizeof(resp));
-
-						resp.exist = os_file_exists(path);
-						if(git_lfs_repo_send_response(socket, REPO_CMD_CHECK_OID_EXIST, hdr.cookie, &resp, sizeof(resp), NULL) < 0)
-						{
-							goto terminate;
-						}
+						if(handle_cmd_check_oid(socket, hdr.cookie, path) < 0) goto terminate;
 						break;
-					}
 					case REPO_CMD_GET_OID:
-					{
-						struct repo_cmd_get_oid_response resp;
-						memset(&resp, 0, sizeof(resp));
-						
-						int fd = os_open_read(path);
-						if(fd < 0)
-						{
-							git_lfs_repo_send_error_response(socket, hdr.cookie, "Object %s does not exist.", oid_str);
-							continue;
-						}
-
-						resp.content_length = os_file_size(path);
-
-						if(git_lfs_repo_send_response(socket, REPO_CMD_GET_OID, hdr.cookie, &resp, sizeof(resp), fd) < 0)
-						{
-							os_close(fd);
-							goto terminate;
-						}
-
-						os_close(fd);
+						if(handle_cmd_get_oid(socket, hdr.cookie, path, oid_str) < 0) goto terminate;
 						break;
-					}
 					case REPO_CMD_PUT_OID:
-					{
-						struct repo_cmd_put_oid_response resp;
-						memset(&resp, 0, sizeof(resp));
-						
-						// create the directory if it does not exist
-						char tmp_dir[PATH_MAX];
-						if(snprintf(tmp_dir, sizeof(tmp_dir), "%s/tmp", repo->root_dir) >= sizeof(tmp_dir))
-						{
-							git_lfs_repo_send_error_response(socket, hdr.cookie, "Repo root directory is too long.");
-							continue;
-						}
-						
-						if(!os_is_directory(tmp_dir)) {
-							if(os_mkdir(tmp_dir, 0700) < 0) {
-								git_lfs_repo_send_error_response(socket, hdr.cookie, "Fail to create tmp directory.");
-								continue;
-							}
-						}
-						
-						struct upload_entry *upload = calloc(1, sizeof *upload);
-						upload->repo = repo;
-						upload->id = next_upload_id++;
-						memcpy(upload->oid, data.oid, sizeof(data.oid));
-						
-						if(snprintf(upload->tmp_path, sizeof(upload->tmp_path), "%s/XXXXXX", tmp_dir) >= sizeof(upload->tmp_path))
-						{
-							free(upload);
-							git_lfs_repo_send_error_response(socket, hdr.cookie, "Temp path is too long.");
-							continue;
-						}
-						
-						int fd = os_mkstemp(upload->tmp_path);
-						if(fd < 0) {
-							free(upload);
-							git_lfs_repo_send_error_response(socket, hdr.cookie, "Object %s could not be created. Failed to create tmp file.", oid_str);
-							continue;
-						}
-						
-						LIST_INSERT_HEAD(&upload_list, upload, entries);
-						
-						resp.ticket = upload->id;
-						if(git_lfs_repo_send_response(socket, REPO_CMD_PUT_OID, hdr.cookie, &resp, sizeof(resp), fd) < 0)
-						{
-							os_close(fd);
-							goto terminate;
-						}
-						
-						os_close(fd);
+						if(handle_cmd_put_oid(socket, hdr.cookie, repo, data.oid, path) < 0) goto terminate;
 						break;
-					}
+					
 				}
 			}
 				break;
 			case REPO_CMD_COMMIT:
-			{
-				struct repo_cmd_commit_request request;
-				if(socket_read_fully(socket, &request, sizeof(request)) != sizeof(request)) {
-					goto terminate;
-				}
-
-				struct upload_entry *up, *upload = NULL;
-				LIST_FOREACH(up, &upload_list, entries)
-				{
-					if(up->id == request.ticket)
-					{
-						upload = up;
-						break;
-					}
-				}
-
-				if(!upload)
-				{
-					git_lfs_repo_send_error_response(socket, hdr.cookie, "Invalid upload ticket.");
-					continue;
-				}
-
-				char oid_str[65];
-				char dest_path[PATH_MAX];
-				
-				oid_to_string(upload->oid, oid_str);
-				
-				if(snprintf(dest_path, sizeof(dest_path), "%s/%.2s/", upload->repo->root_dir, oid_str) >= sizeof(dest_path))
-				{
-					git_lfs_repo_send_error_response(socket, hdr.cookie, "Object %s could not be created. Path too long.", oid_str);
-					continue;
-				}
-				
-				if(!os_is_directory(dest_path))
-				{
-					if(os_mkdir(dest_path, 0700) < 0)
-					{
-						git_lfs_repo_send_error_response(socket, hdr.cookie, "Object %s could not be created. Invalid path.", oid_str);
-						continue;
-					}
-				}
-				
-				if(strlcat(dest_path, oid_str, sizeof(dest_path)) >= sizeof(dest_path))
-				{
-					git_lfs_repo_send_error_response(socket, hdr.cookie, "Object %s could not be created. Path too long.", oid_str);
-					continue;
-				}
-				
-				if(config->verify_upload)
-				{
-					int fd = os_open_read(upload->tmp_path);
-					int n;
-					char buffer[4096];
-					if(fd < 0)
-					{
-						git_lfs_repo_send_error_response(socket, hdr.cookie, "Unable to open written file for object %s.", oid_str);
-						continue;
-					}
-					
-					SHA256_CTX ctx;
-					SHA256_Init(&ctx);
-					while((n = os_read(fd, buffer, sizeof(buffer))) > 0)
-					{
-						SHA256_Update(&ctx, buffer, n);
-					}
-					os_close(fd);
-					
-					unsigned char sha256[SHA256_DIGEST_LENGTH];
-					SHA256_Final(sha256, &ctx);
-					
-					if(memcmp(upload->oid, sha256, SHA256_DIGEST_LENGTH) != 0)
-					{
-						char actual_hash_str[65];
-						oid_to_string(sha256, actual_hash_str);
-						git_lfs_repo_send_error_response(socket, hdr.cookie, "Object %s failed verification. Unexpected hash %s.", oid_str, actual_hash_str);
-						
-						LIST_REMOVE(upload, entries);
-						
-						os_unlink(upload->tmp_path);
-						free(upload);
-						
-						continue;
-					}
-					
-					if(os_rename(upload->tmp_path, dest_path) < 0)
-					{
-						git_lfs_repo_send_error_response(socket, hdr.cookie, "Object %s failed rename.", oid_str);
-						continue;
-					}
-					
-					LIST_REMOVE(upload, entries);
-					os_unlink(upload->tmp_path);
-					free(upload);
-				}
-				
-				if(git_lfs_repo_send_response(socket, REPO_CMD_COMMIT, hdr.cookie, NULL, 0, NULL) < 0)
-				{
-					goto terminate;
-				}
+				handle_cmd_commit(socket, hdr.cookie, config);
 				break;
-			}
 			case REPO_CMD_TERMINATE:
 				git_lfs_repo_send_response(socket, REPO_CMD_TERMINATE, hdr.cookie, NULL, 0, NULL);
 				goto terminate;
