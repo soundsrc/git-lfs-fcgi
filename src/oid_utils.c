@@ -51,7 +51,7 @@ int oid_is_valid(const char *oid)
 	return 1;
 }
 
-void oid_to_string(unsigned char oid[32], char str[65])
+void oid_to_string(const unsigned char oid[32], char str[65])
 {
 	for(int i = 0; i < 32; ++i) {
 		str[i << 1] = int_to_hex(oid[i] >> 4);

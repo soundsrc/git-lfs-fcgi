@@ -17,7 +17,7 @@
 #define OID_UTILS_H
 
 int oid_is_valid(const char *oid);
-void oid_to_string(unsigned char oid[32], char str[65]);
+void oid_to_string(const unsigned char oid[32], char str[65]);
 int oid_from_string(const char str[65], unsigned char oid[32]);
 
 #endif
