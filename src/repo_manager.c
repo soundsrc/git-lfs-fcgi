@@ -60,9 +60,21 @@ static LIST_HEAD(git_lfs_access_token_list, git_lfs_access_token) access_token_l
 static struct git_lfs_access_token *git_lfs_add_access_token(const struct git_lfs_repo *repo, time_t expires_at)
 {
 	static const char ch[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+	struct git_lfs_access_token *access_token;
 	
-	struct git_lfs_access_token *access_token = calloc(1, sizeof *access_token);
-	access_token->expire = expires_at;
+	time_t now = time(NULL);
+
+	// find existing access token
+	LIST_FOREACH(access_token, &access_token_list, entries)
+	{
+		if(now < access_token->expire)
+		{
+			return access_token;
+		}
+	}
+	
+	access_token = calloc(1, sizeof *access_token);
+	access_token->expire = expires_at + 60;
 	access_token->repo = repo;
 	
 	for(int i = 0; i < sizeof(access_token->token) - 1; ++i)
