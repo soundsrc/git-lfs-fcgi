@@ -17,8 +17,13 @@
 #include <stdio.h>
 #include <sandbox.h>
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
 int os_sandbox(enum sandbox_profile profile)
 {
+	/* mac os x sandbox disbaled, since it doesn't work reliabily */
+#if 0
 	const char *osx_sandbox_profile;
 	char *error;
 	int ret;
@@ -45,4 +50,9 @@ int os_sandbox(enum sandbox_profile profile)
 	}
 
 	return ret;
+#endif
+
+	return 0;
 }
+
+#pragma clang diagnostic pop
