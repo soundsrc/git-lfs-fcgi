@@ -2,6 +2,7 @@ project(git-lfs-server)
 
 cmake_minimum_required (VERSION 3.0.2)
 include(ExternalProject)
+include(FindOpenSSL)
 
 find_package(BISON)
 find_package(FLEX)
@@ -16,11 +17,13 @@ endif()
 
 link_directories("${CMAKE_BINARY_DIR}/lib")
 
-ExternalProject_Add(libressl
-	SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/libressl"
-	CMAKE_ARGS -DENABLE_ASM=OFF -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}
-	INSTALL_DIR "${CMAKE_BINARY_DIR}"
-)
+if(NOT OPENSSL_FOUND)
+	ExternalProject_Add(libressl
+		SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/libressl"
+		CMAKE_ARGS -DENABLE_ASM=OFF -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}
+		INSTALL_DIR "${CMAKE_BINARY_DIR}"
+	)
+endif()
 
 add_library(mongoose STATIC
 	"external/mongoose/mongoose.c"
@@ -117,13 +120,27 @@ if(LINUX)
 	)
 endif(LINUX)
 
+SET(INC_DIRS
+	"${CMAKE_CURRENT_SOURCE_DIR}"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	"${CMAKE_CURRENT_SOURCE_DIR}/external/mongoose"
+	"${CMAKE_CURRENT_SOURCE_DIR}/external/json-c"
+	"${CMAKE_CURRENT_SOURCE_DIR}/external/libfcgi/include"
+)
+
 set(LIB_FILES
-	"ssl"
-	"crypto"
 	"mongoose"
 	"json-c"
 	"fcgi"
 	"pthread")
+
+if(OPENSSL_FOUND)
+	list(APPEND INC_DIRS ${OPENSSL_INCLUDE_DIR})
+	list(APPEND LIB_FILES ${OPENSSL_LIBRARIES})
+else()
+	list(APPEND INC_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/external/libressl/include")
+	list(APPEND LIB_FILES "ssl" "crypto")
+endif()
 
 if(LINUX)
 	list(APPEND LIB_FILES
@@ -138,16 +155,14 @@ add_executable(git-lfs-server
 )
 
 target_include_directories(git-lfs-server PUBLIC
-	"${CMAKE_CURRENT_SOURCE_DIR}"
-	"${CMAKE_CURRENT_SOURCE_DIR}/src"
-	"${CMAKE_CURRENT_SOURCE_DIR}/external/libressl/include"
-	"${CMAKE_CURRENT_SOURCE_DIR}/external/mongoose"
-	"${CMAKE_CURRENT_SOURCE_DIR}/external/json-c"
-	"${CMAKE_CURRENT_SOURCE_DIR}/external/libfcgi/include"
+	${INC_DIRS}
 )
 
 target_link_libraries(git-lfs-server PUBLIC
 	${LIB_FILES}
 )
 
-add_dependencies(git-lfs-server libressl)
+if(NOT OPENSSL_FOUND)
+	add_dependencies(git-lfs-server libressl)
+endif()
+
