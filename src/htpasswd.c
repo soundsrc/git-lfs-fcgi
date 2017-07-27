@@ -129,12 +129,15 @@ int authenticate_user_with_password(struct htpasswd *htpasswd, const char *usern
 
 void free_htpasswd(struct htpasswd * htpasswd)
 {
-	struct password_entry *user;
-	while (!SLIST_EMPTY(htpasswd))
+	if(htpasswd)
 	{
-		user = SLIST_FIRST(htpasswd);
-		SLIST_REMOVE_HEAD(htpasswd, entries);
-		free(user);
+		struct password_entry *user;
+		while (!SLIST_EMPTY(htpasswd))
+		{
+			user = SLIST_FIRST(htpasswd);
+			SLIST_REMOVE_HEAD(htpasswd, entries);
+			free(user);
+		}
+		free(htpasswd);
 	}
-	free(htpasswd);
 }
