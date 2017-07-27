@@ -357,7 +357,7 @@ static int handle_cmd_put_oid(struct repo_manager *mgr,
 	{
 		if(os_mkdir(tmp_dir, 0700) < 0)
 		{
-			git_lfs_repo_send_error_response(mgr, cookie, "Fail to create tmp directory.");
+			git_lfs_repo_send_error_response(mgr, cookie, "Fail to create tmp directory. Repository root directory not accessible.");
 			return 0;
 		}
 	}
