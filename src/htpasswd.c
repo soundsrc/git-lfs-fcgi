@@ -16,6 +16,7 @@
 #include "htpasswd.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <ctype.h>
 #include "compat/string.h"
 #include "crypt_blowfish.h"

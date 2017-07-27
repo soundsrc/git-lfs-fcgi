@@ -20,6 +20,7 @@
 #include <stdarg.h>
 #include <time.h>
 #include <openssl/sha.h>
+#include "compat/string.h"
 #include "compat/queue.h"
 #include "os/mutex.h"
 #include "os/io.h"
@@ -228,7 +229,7 @@ static int git_lfs_repo_send_response(struct repo_manager *mgr,
 	}
 	
 	if(fd) {
-		if(os_send_with_file_descriptor(mgr->socket, resp_data, resp_size, fd) != resp_size) {
+		if(os_send_with_file_descriptor(mgr->socket, resp_data, resp_size, *fd) != resp_size) {
 			return -1;
 		}
 	} else {
@@ -322,7 +323,7 @@ static int handle_cmd_get_oid(struct repo_manager *mgr, uint32_t cookie, const c
 	
 	resp.content_length = os_file_size(path);
 	
-	if(git_lfs_repo_send_response(mgr, REPO_CMD_GET_OID, cookie, &resp, sizeof(resp), fd) < 0)
+	if(git_lfs_repo_send_response(mgr, REPO_CMD_GET_OID, cookie, &resp, sizeof(resp), &fd) < 0)
 	{
 		os_close(fd);
 		return -1;
@@ -384,7 +385,7 @@ static int handle_cmd_put_oid(struct repo_manager *mgr,
 	LIST_INSERT_HEAD(&upload_list, upload, entries);
 	
 	resp.ticket = upload->id;
-	if(git_lfs_repo_send_response(mgr, REPO_CMD_PUT_OID, cookie, &resp, sizeof(resp), fd) < 0)
+	if(git_lfs_repo_send_response(mgr, REPO_CMD_PUT_OID, cookie, &resp, sizeof(resp), &fd) < 0)
 	{
 		os_close(fd);
 		return -1;
