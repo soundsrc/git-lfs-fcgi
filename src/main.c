@@ -33,6 +33,7 @@
 #include "httpd.h"
 #include "git_lfs_server.h"
 #include "repo_manager.h"
+#include "htpasswd.h"
 #include "mongoose.h"
 
 int child_pid = -1;
@@ -147,6 +148,14 @@ int main(int argc, char *argv[])
 		signal(SIGTERM, sig_term);
 		signal(SIGQUIT, sig_term);
 		signal(SIGSTOP, sig_term);
+		
+		// free auth info in parent since it doesn't need access to it
+		struct git_lfs_repo *repo;
+		SLIST_FOREACH(repo, &config->repos, entries)
+		{
+			free_htpasswd(repo->auth);
+			repo->auth = NULL;
+		}
 		
 		// todo, allow configurable
 		if(os_chroot("/var/empty") < 0) {
