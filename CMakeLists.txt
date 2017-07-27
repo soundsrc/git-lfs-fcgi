@@ -6,6 +6,14 @@ include(ExternalProject)
 find_package(BISON)
 find_package(FLEX)
 
+if(UNIX AND NOT APPLE)
+	set(LINUX TRUE)
+endif()
+
+if(LINUX)
+	set(CMAKE_C_FLAGS "-std=gnu99")
+endif()
+
 link_directories("${CMAKE_BINARY_DIR}/lib")
 
 ExternalProject_Add(libressl
@@ -83,7 +91,7 @@ set(SRC_FILES
 	"src/parse.y"
 	"src/scan.l"
 )
-if(APPLE)
+if(UNIX)
 	list(APPEND SRC_FILES
 		"compat/base64.c"
 		"compat/explicit_bzero.c"
@@ -103,6 +111,26 @@ if(APPLE)
 	)
 endif(APPLE)
 
+if(LINUX)
+	list(APPEND SRC_FILES
+		"os/linux/sandbox.c"
+	)
+endif(LINUX)
+
+set(LIB_FILES
+	"ssl"
+	"crypto"
+	"mongoose"
+	"json-c"
+	"fcgi"
+	"pthread")
+
+if(LINUX)
+	list(APPEND LIB_FILES
+		"dl"
+	)
+endif()
+
 add_executable(git-lfs-server
 	${SRC_FILES}
 	${BISON_ConfigParser_OUTPUTS} 
@@ -119,12 +147,7 @@ target_include_directories(git-lfs-server PUBLIC
 )
 
 target_link_libraries(git-lfs-server PUBLIC
-	"ssl"
-	"crypto"
-	"mongoose"
-	"json-c"
-	"fcgi"
-	"pthread"
+	${LIB_FILES}
 )
 
 add_dependencies(git-lfs-server libressl)
