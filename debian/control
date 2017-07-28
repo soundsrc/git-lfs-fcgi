@@ -1,0 +1,17 @@
+Source: git-lfs-server
+Section: libdevel
+Priority: optional
+Maintainer: Sound <sound@sagaforce.com>
+Build-Depends: debhelper (>= 9), cmake, libssl-dev
+Standards-Version: 3.9.5
+Homepage: <insert the upstream URL, if relevant>
+#Vcs-Git: git://anonscm.debian.org/collab-maint/git-lfs-server.git
+#Vcs-Browser: http://anonscm.debian.org/?p=collab-maint/git-lfs-server.git;a=summary
+
+Package: git-lfs-server
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: A basic Git LFS server 
+ This package provides a standalone / FCGI server which supports the Git LFS
+ protocol. Currently, it includes support run as a standlone server or as a
+ FastCGI binary.
