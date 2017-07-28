@@ -1,1 +1,1 @@
-conf/git-lfs-server.conf /etc/git-lfs-server.conf
+conf/git-lfs-server.conf etc/
