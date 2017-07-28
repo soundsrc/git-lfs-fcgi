@@ -106,7 +106,7 @@ if(UNIX)
 		"os/unix/socket.c"
 		"os/unix/threads.c"
 	)
-endif(APPLE)
+endif(UNIX)
 
 if(APPLE)
 	list(APPEND SRC_FILES
@@ -116,6 +116,9 @@ endif(APPLE)
 
 if(LINUX)
 	list(APPEND SRC_FILES
+		"compat/strlcpy.c"
+		"compat/strlcat.c"
+		"compat/explicit_bzero.c"
 		"os/linux/sandbox.c"
 	)
 endif(LINUX)
