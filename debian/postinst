@@ -36,4 +36,17 @@ esac
 
 #DEBHELPER#
 
+# add system users
+if ! getent group git-lfs > /dev/null 2>&1
+then
+	addgroup --system git-lfs
+	adduser --system git-lfs
+fi
+
+# create folders
+mkdir /etc/git-lfs-server/conf.d 2>&1 > /dev/null || true
+mkdir /var/git-lfs-server > /dev/null || true
+
+
+
 exit 0

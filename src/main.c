@@ -54,7 +54,7 @@ static void sig_term(int sig)
 int main(int argc, char *argv[])
 {
 	int verbose = 0;
-	char config_path[4096] = "/etc/git-lfs-server/git-lfs.conf";
+	char config_path[4096] = "/etc/git-lfs-server/git-lfs-server.conf";
 
 	static struct option long_options[] =
 	{
