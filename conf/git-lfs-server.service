@@ -1,0 +1,12 @@
+[Unit]
+Description=Git LFS Server
+After=network.target auditd.service
+
+[Service]
+ExecStart=/usr/sbin/git-lfs-server
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

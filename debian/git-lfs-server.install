@@ -1,2 +1,3 @@
 conf/git-lfs-server.conf etc/
-build/git-lfs-server usr/bin/
+conf/git-lfs-server.service etc/systemd/service
+build/git-lfs-server usr/sbin/
