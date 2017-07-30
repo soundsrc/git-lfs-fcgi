@@ -547,7 +547,7 @@ int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_
 				char path[PATH_MAX];
 				char oid_str[65];
 				oid_to_string(data.oid, oid_str);
-				if(snprintf(path, sizeof(path), "%s/%.2s/%s", repo->root_dir, oid_str, oid_str) >= sizeof(path)) {
+				if(snprintf(path, sizeof(path), "%s/%.2s/%s", repo->root_dir, oid_str, oid_str + 2) >= sizeof(path)) {
 					git_lfs_repo_send_error_response(mgr, hdr.cookie, "Unable to get object. Path is too long.");
 					continue;
 				}
