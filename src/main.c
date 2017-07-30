@@ -115,20 +115,11 @@ int main(int argc, char *argv[])
 		goto error1;
 	}
 	
-	if(child_pid == 0) {
-		
-		if(config->chroot_path)
+	if(child_pid == 0)
+	{
+		if(os_droproot(config->chroot_path, config->user, config->group) < 0)
 		{
-			if(os_chroot(config->chroot_path) < 0)
-			{
-				fprintf(stderr, "Failed to chroot to path \"%s\"\n", config->chroot_path);
-				goto error1;
-			}
-		}
-		
-		if(os_droproot(config->user, config->group) < 0)
-		{
-			fprintf(stderr, "warning: Failed to change to user '%s' and group '%s'.\n", config->user, config->group);
+			fprintf(stderr, "Failed to chroot and change to user '%s' and group '%s'.\n", config->user, config->group);
 			goto error1;
 		}
 		
@@ -142,7 +133,9 @@ int main(int argc, char *argv[])
 		git_lfs_repo_manager_service(mgr, config);
 		repo_manager_free(mgr);
 		os_close(fd[1]);
-	} else {
+	}
+	else
+	{
 		
 		signal(SIGCHLD, child_terminated);
 		signal(SIGTERM, sig_term);
@@ -156,17 +149,10 @@ int main(int argc, char *argv[])
 			free_htpasswd(repo->auth);
 			repo->auth = NULL;
 		}
-		
-		// todo, allow configurable
-		if(os_chroot("/var/empty") < 0)
+
+		if(os_droproot("/var/empty", config->user, config->group) < 0)
 		{
-			fprintf(stderr, "warning: Chroot failed.\n");
-			goto error1;
-		}
-		
-		if(os_droproot(config->user, config->group) < 0)
-		{
-			fprintf(stderr, "warning: Failed to change to user '%s' and group '%s'.\n", config->user, config->group);
+			fprintf(stderr, "Failed to chroot and change to user '%s' and group '%s'.\n", config->user, config->group);
 			goto error1;
 		}
 
