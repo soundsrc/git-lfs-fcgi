@@ -58,6 +58,8 @@ struct git_lfs_config
 	char *chroot_path;
 	char *user;
 	char *group;
+	
+	char *process_chroot;
 
 	struct git_lfs_repo_list repos;
 };

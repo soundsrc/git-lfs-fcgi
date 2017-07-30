@@ -46,6 +46,11 @@ struct git_lfs_config *git_lfs_load_config(const char *path)
 	{
 		config->group = strdup("git-lfs");
 	}
+	
+	if(!config->process_chroot)
+	{
+		config->process_chroot = strdup("/var/lib/git-lfs-server/empty");
+	}
 
 	return config;
 }
@@ -57,6 +62,7 @@ void git_lfs_free_config(struct git_lfs_config *config)
 	free(config->chroot_path);
 	free(config->user);
 	free(config->group);
+	free(config->process_chroot);
 
 	while (!SLIST_EMPTY(&config->repos))
 	{

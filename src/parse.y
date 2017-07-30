@@ -36,6 +36,7 @@ int config_parse_init(struct git_lfs_config *config)
 %token FASTCGI_SERVER
 %token NUM_THREADS
 %token CHROOT_PATH
+%token PROCESS_CHROOT
 %token USER
 %token GROUP
 %token FASTCGI_SOCKET
@@ -64,6 +65,9 @@ global_declaration
 	}
 	| CHROOT_PATH STRING {
 		parse_config->chroot_path = strndup($2, sizeof($2));	
+	}
+	| PROCESS_CHROOT STRING {
+		parse_config->process_chroot = strndup($2, sizeof($2));
 	}
 	| USER STRING {
 		parse_config->user = strndup($2, sizeof($2));
