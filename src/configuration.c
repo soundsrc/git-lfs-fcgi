@@ -19,30 +19,23 @@
 #include "compat/string.h"
 #include "compat/queue.h"
 
-extern FILE * yyin;
 extern int yyparse (void);
 
 struct git_lfs_config *git_lfs_load_config(const char *path)
 {
-	yyin = fopen(path, "r");
-	if(!yyin) {
-		fprintf(stderr, "%s: Failed to open file.\n", path);
-		return NULL;
-	}
-	
 	struct git_lfs_config *config = (struct git_lfs_config *)calloc(1, sizeof(struct git_lfs_config));
 	config->verify_upload = 1;
 	config->port = 80;
 
 	SLIST_INIT(&config->repos);
 
-	config_scan_init();
-	config_parse_init(path, config);
+	config_scan_init(path);
+	config_parse_init(config);
 
-	yyparse();
-	
-	fclose(yyin);
-	yyin = NULL;
+	if(yyparse() != 0)
+	{
+		return NULL;
+	}
 	
 	if(!config->user)
 	{

@@ -3,26 +3,20 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "compat/string.h"
+#include "compat/queue.h"
 #include "htpasswd.h"
 #include "configuration.h"
 
-extern int scan_line_count;
-static const char *parse_filename;
 static struct git_lfs_config *parse_config;
 static struct git_lfs_repo *parse_repo;
 static uint32_t s_next_id = 0;
 
-int yyerror (const char *msg)
+int config_parse_init(struct git_lfs_config *config)
 {
-	printf("%s:%d: %s\n", parse_filename, scan_line_count, msg);
-	return 0;
-}
-
-void config_parse_init(const char *filename, struct git_lfs_config *config)
-{
-	parse_filename = filename;
 	parse_config = config;
 	parse_repo = NULL;
+	
+	return 1;
 }
 %}
 
