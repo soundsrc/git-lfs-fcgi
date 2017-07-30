@@ -71,6 +71,14 @@ bison_target(ConfigParser src/parse.y ${CMAKE_CURRENT_BINARY_DIR}/config_parser.
 flex_target(ConfigParser src/scan.l ${CMAKE_CURRENT_BINARY_DIR}/config_scanner.l.c)
 
 set(SRC_FILES
+	"os/droproot.h"
+	"os/filesystem.h"
+	"os/io.h"
+	"os/mutex.h"
+	"os/process.h"
+	"os/socket.h"
+	"os/threads.h"
+	"os/signal.h"
 	"src/crypt_blowfish.c"
 	"src/crypt_blowfish.h"
 	"src/configuration.c"
@@ -105,6 +113,7 @@ if(UNIX)
 		"os/unix/process.c"
 		"os/unix/socket.c"
 		"os/unix/threads.c"
+		"os/unix/signal.c"
 	)
 endif(UNIX)
 

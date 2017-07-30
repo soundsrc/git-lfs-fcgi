@@ -17,7 +17,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
 #include <fcgiapp.h>
 #include "mongoose.h"
 #include "compat/queue.h"
@@ -26,6 +25,7 @@
 #include "os/sandbox.h"
 #include "os/mutex.h"
 #include "os/threads.h"
+#include "os/signal.h"
 #include "htpasswd.h"
 #include "git_lfs_server.h"
 #include "repo_manager.h"
@@ -256,12 +256,12 @@ int git_lfs_start_httpd(struct repo_manager *mgr, const struct git_lfs_config *c
 			return -1;
 		}
 		
-		signal(SIGINT, int_handler);
+		os_signal(SIGINT, int_handler);
 		os_mutex_lock(running_mutex);
 		os_mutex_lock(running_mutex);
 		os_mutex_unlock(running_mutex);
 
-		signal(SIGINT, SIG_DFL);
+		os_signal(SIGINT, SIG_DFL);
 		mg_stop(context);
 		
 		os_mutex_destroy(running_mutex);

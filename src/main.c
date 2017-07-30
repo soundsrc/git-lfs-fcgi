@@ -28,6 +28,7 @@
 #include "os/socket.h"
 #include "os/process.h"
 #include "os/sandbox.h"
+#include "os/signal.h"
 #include "configuration.h"
 #include "socket_io.h"
 #include "httpd.h"
@@ -42,13 +43,6 @@ static void child_terminated(int sig)
 {
 	fprintf(stderr, "Unexpected termination of child process.\n");
 	exit(-1);
-}
-
-static void sig_term(int sig)
-{
-	if(child_pid >= 0) {
-		os_kill(child_pid, SIGTERM);
-	}
 }
 
 int main(int argc, char *argv[])
@@ -136,11 +130,7 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		
-		signal(SIGCHLD, child_terminated);
-		signal(SIGTERM, sig_term);
-		signal(SIGQUIT, sig_term);
-		signal(SIGSTOP, sig_term);
+		os_signal(SIGCHLD, child_terminated);
 		
 		// free auth info in parent since it doesn't need access to it
 		struct git_lfs_repo *repo;
