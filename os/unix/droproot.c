@@ -21,7 +21,7 @@
 #include <grp.h>
 #include "os/droproot.h"
 
-int os_droproot(const char *chroot_path, const char *user, const char *group)
+int os_droproot(const char *user, const char *group)
 {
 	uid_t uid;
 	gid_t gid;
@@ -37,14 +37,6 @@ int os_droproot(const char *chroot_path, const char *user, const char *group)
 		return -1;
 	}
 	gid = grp->gr_gid;
-
-	if(chdir(chroot_path) < 0) {
-		return -1;
-	}
-	
-	if(chroot(chroot_path) < 0) {
-		return -1;
-	}
 
 	if(setgid(gid) < 0) {
 		fprintf(stderr, "Failed to drop group privilege.\n");

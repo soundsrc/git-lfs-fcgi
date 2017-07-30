@@ -22,8 +22,8 @@ uri { return URI; }
 verify_upload { return VERIFY_UPLOAD; }
 yes { return YES; }
 no { return NO; }
-chroot_user { return CHROOT_USER; }
-chroot_group { return CHROOT_GROUP; }
+user { return USER; }
+group { return GROUP; }
 chroot_path { return CHROOT_PATH; }
 
 enable_authentication { return ENABLE_AUTHENTICATION; }

@@ -16,6 +16,7 @@
 #include "configuration.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "compat/string.h"
 #include "compat/queue.h"
 
 extern FILE * yyin;
@@ -43,6 +44,16 @@ struct git_lfs_config *git_lfs_load_config(const char *path)
 	fclose(yyin);
 	yyin = NULL;
 	
+	if(!config->user)
+	{
+		config->user = strdup("git-lfs");
+	}
+	
+	if(!config->group)
+	{
+		config->group = strdup("git-lfs");
+	}
+
 	return config;
 }
 
@@ -51,8 +62,8 @@ void git_lfs_free_config(struct git_lfs_config *config)
 	free(config->base_url);
 	free(config->fastcgi_socket);
 	free(config->chroot_path);
-	free(config->chroot_user);
-	free(config->chroot_group);
+	free(config->user);
+	free(config->group);
 
 	while (!SLIST_EMPTY(&config->repos))
 	{

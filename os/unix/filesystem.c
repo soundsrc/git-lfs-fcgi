@@ -59,6 +59,11 @@ int os_unlink(const char *path)
 
 int os_chroot(const char *path)
 {
+	if(chdir(path) < 0)
+	{
+		return -1;
+	}
+
 	return chroot(path);
 }
 

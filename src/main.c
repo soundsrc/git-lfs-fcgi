@@ -89,22 +89,6 @@ int main(int argc, char *argv[])
 	}
 	config->verbose = verbose;
 
-	
-	if(config->chroot_path)
-	{
-		if(!config->chroot_user || !config->chroot_group)
-		{
-			fprintf(stderr, "chroot_user and chroot_group must be specified when using chroot_path.\n");
-			goto error1;
-		}
-		
-		if(os_droproot(config->chroot_path, config->chroot_user, config->chroot_group) < 0)
-		{
-			fprintf(stderr, "Failed to chroot and set user/group name.\n");
-			goto error1;
-		}
-	}
-
 	if(verbose) {
 		if(config->fastcgi_server) {
 			printf("FastCGI enabled.\n");
@@ -112,8 +96,8 @@ int main(int argc, char *argv[])
 		}
 		if(config->chroot_path) {
 			printf("Chroot: %s\n", config->chroot_path);
-			printf("User: %s\n", config->chroot_user);
-			printf("Group: %s\n", config->chroot_group);
+			printf("User: %s\n", config->user);
+			printf("Group: %s\n", config->group);
 		}
 	}
 	
@@ -132,6 +116,22 @@ int main(int argc, char *argv[])
 	}
 	
 	if(child_pid == 0) {
+		
+		if(config->chroot_path)
+		{
+			if(os_chroot(config->chroot_path) < 0)
+			{
+				fprintf(stderr, "Failed to chroot to path \"%s\"\n", config->chroot_path);
+				goto error1;
+			}
+		}
+		
+		if(os_droproot(config->user, config->group) < 0)
+		{
+			fprintf(stderr, "warning: Failed to change to user '%s' and group '%s'.\n", config->user, config->group);
+			goto error1;
+		}
+		
 		if(os_sandbox(SANDBOX_FILEIO) < 0) {
 			fprintf(stderr, "Sandbox failed.\n");
 			goto error1;
@@ -158,12 +158,21 @@ int main(int argc, char *argv[])
 		}
 		
 		// todo, allow configurable
-		if(os_chroot("/var/empty") < 0) {
+		if(os_chroot("/var/empty") < 0)
+		{
 			fprintf(stderr, "warning: Chroot failed.\n");
+			goto error1;
+		}
+		
+		if(os_droproot(config->user, config->group) < 0)
+		{
+			fprintf(stderr, "warning: Failed to change to user '%s' and group '%s'.\n", config->user, config->group);
+			goto error1;
 		}
 
 		// only allow internet
-		if(os_sandbox(SANDBOX_INET_SOCKET) < 0) {
+		if(os_sandbox(SANDBOX_INET_SOCKET) < 0)
+		{
 			fprintf(stderr, "Sandbox failed.\n");
 			goto error1;
 		}

@@ -56,8 +56,8 @@ struct git_lfs_config
 	int num_threads;
 	
 	char *chroot_path;
-	char *chroot_user;
-	char *chroot_group;
+	char *user;
+	char *group;
 
 	struct git_lfs_repo_list repos;
 };
