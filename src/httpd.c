@@ -35,10 +35,15 @@
 static os_mutex_t running_mutex;
 static os_mutex_t accept_mutex;
 
-static void int_handler(int sig)
+static void term_handler(int sig)
 {
 	(void)sig;
 	os_mutex_unlock(running_mutex);
+}
+
+static void fcgi_term_handler(int sig)
+{
+	FCGX_ShutdownPending();
 }
 
 extern int mg_vprintf(struct mg_connection *conn, const char *fmt, va_list ap);
@@ -256,12 +261,14 @@ int git_lfs_start_httpd(struct repo_manager *mgr, const struct git_lfs_config *c
 			return -1;
 		}
 		
-		os_signal(SIGINT, int_handler);
+		os_signal(SIGINT, term_handler);
+		os_signal(SIGTERM, term_handler);
 		os_mutex_lock(running_mutex);
 		os_mutex_lock(running_mutex);
 		os_mutex_unlock(running_mutex);
 
 		os_signal(SIGINT, SIG_DFL);
+		os_signal(SIGTERM, SIG_DFL);
 		mg_stop(context);
 		
 		os_mutex_destroy(running_mutex);
@@ -281,6 +288,9 @@ int git_lfs_start_httpd(struct repo_manager *mgr, const struct git_lfs_config *c
 			return -1;
 		}
 
+		os_signal(SIGINT, fcgi_term_handler);
+		os_signal(SIGTERM, fcgi_term_handler);
+		
 		struct thread_info *thread_infos = (struct thread_info *)calloc(config->num_threads, sizeof(struct thread_info));
 		
 		for(int i = 1; i < config->num_threads; i++) {
@@ -295,6 +305,9 @@ int git_lfs_start_httpd(struct repo_manager *mgr, const struct git_lfs_config *c
 		thread_infos[0].repo_mgr = mgr;
 		fastcgi_handler_thread(&thread_infos[0]);
 		
+		os_signal(SIGINT, SIG_DFL);
+		os_signal(SIGTERM, SIG_DFL);
+
 		os_mutex_destroy(accept_mutex);
 		free(thread_infos);
 	}
