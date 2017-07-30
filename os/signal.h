@@ -16,6 +16,8 @@
 #ifndef OS_SIGNAL_H
 #define OS_SIGNAL_H
 
+#include <signal.h>
+
 int os_signal(int signo, void (*action)(int));
 
 #endif
