@@ -15,7 +15,10 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+#include <assert.h>
+#include <glob.h>
 #include <sys/stat.h>
 #include "os/filesystem.h"
 
@@ -70,4 +73,43 @@ int os_chroot(const char *path)
 int os_mkstemp(char *template_path)
 {
 	return mkstemp(template_path);
+}
+
+const char ** os_glob(const char *pattern, int *num_matches)
+{
+	glob_t glob_results;
+	if(glob(pattern, GLOB_NOCHECK, NULL, &glob_results) < 0)
+	{
+		return NULL;
+	}
+	
+	size_t pointers_size = glob_results.gl_pathc * sizeof(const char *);
+	size_t alloc_size = pointers_size;
+
+	// determine the amount of memory to allocate
+	for (int i = 0; i < glob_results.gl_pathc; ++i)
+	{
+		const char *filename = glob_results.gl_pathv[i];
+		size_t len = strlen(filename) + 1;
+		len = (len + 3) & ~3; // align-4
+		alloc_size += len;
+	}
+	
+	const char **result = calloc(1, alloc_size);
+	char *filenames_start = (char *)result + pointers_size;
+	
+	for (int i = 0; i < glob_results.gl_pathc; ++i)
+	{
+		size_t n = strlen(glob_results.gl_pathv[i]) + 1;
+		strncpy(filenames_start, glob_results.gl_pathv[i], n);
+		filenames_start[n - 1] = 0;
+		result[i] = filenames_start;
+		filenames_start += (n + 3) & ~3;
+	}
+	
+	if(num_matches) *num_matches = glob_results.gl_pathc;
+
+	assert((char *)result + alloc_size == filenames_start);
+	
+	return result;
 }
