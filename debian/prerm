@@ -35,4 +35,7 @@ esac
 
 #DEBHELPER#
 
+rmdir /var/git-lfs-server/empty 2>&1 || true
+rmdir /var/git-lfs-server 2>&1 || true
+
 exit 0

@@ -150,7 +150,7 @@ int main(int argc, char *argv[])
 			repo->auth = NULL;
 		}
 
-		if(os_droproot("/var/empty", config->user, config->group) < 0)
+		if(os_droproot("/var/git-lfs-server/empty", config->user, config->group) < 0)
 		{
 			fprintf(stderr, "Failed to chroot and change to user '%s' and group '%s'.\n", config->user, config->group);
 			goto error1;
