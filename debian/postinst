@@ -44,7 +44,7 @@ then
 fi
 
 # create folders
-mkdir /var/git-lfs-server 2&>1 /dev/null || true
-mkdir /var/empty 2&>1 /dev/null || true
+mkdir /var/git-lfs-server > /dev/null 2&>1 || true
+mkdir /var/empty > /dev/null 2&>1 || true
 
 exit 0
