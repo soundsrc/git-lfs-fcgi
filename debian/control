@@ -2,7 +2,7 @@ Source: git-lfs-server
 Section: libdevel
 Priority: optional
 Maintainer: Sound <sound@sagaforce.com>
-Build-Depends: debhelper (>= 9), cmake, libssl-dev
+Build-Depends: debhelper (>= 9), cmake, bison, flex, libssl-dev
 Standards-Version: 3.9.5
 Homepage: <insert the upstream URL, if relevant>
 #Vcs-Git: git://anonscm.debian.org/collab-maint/git-lfs-server.git
