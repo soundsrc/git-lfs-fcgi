@@ -16,6 +16,6 @@
 #ifndef OS_DROPROOT_H
 #define OS_DROPROOT_H
 
-int os_droproot(const char *user, const char *group);
+int os_droproot(const char *chroot_path, const char *user, const char *group);
 
 #endif
