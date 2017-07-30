@@ -440,7 +440,7 @@ static int handle_cmd_commit(struct repo_manager *mgr, uint32_t cookie, const st
 		}
 	}
 	
-	if(strlcat(dest_path, oid_str, sizeof(dest_path)) >= sizeof(dest_path))
+	if(strlcat(dest_path, oid_str + 2, sizeof(dest_path)) >= sizeof(dest_path))
 	{
 		git_lfs_repo_send_error_response(mgr, cookie, "Object %s could not be created. Path too long.", oid_str);
 		return 0;
