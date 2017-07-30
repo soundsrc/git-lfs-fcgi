@@ -15,7 +15,7 @@ make
 ## Running
 
 ```
-git-lfs-server-fcgi --config=/etc/git-lfs-server.conf
+git-lfs-server --config=/etc/git-lfs-server.conf
 ```
 
 ## Configuration file
@@ -34,6 +34,15 @@ Global settings which can be specified are defined here:
 	port _number_
 		The listening port number. Not valid in FastCGI mode.
 
+	chroot_path _path_
+		Optional chroot to a folder. Repository LFS objects will be contained to this folder.
+
+	user _name_
+		System username to run the server
+
+	group _name_
+		System group to run the server
+
 	verify_upload [yes|no]
 		Whether uploaded files are verified by comparing the SHA256 with the file contents before saving it.
 		Default is true.
@@ -46,7 +55,10 @@ Global settings which can be specified are defined here:
 
 	fastcgi_socket _path_
 		Path to the unix domain socket to use for FastCGI communication. If specified in the format of ":_port_",
-		then listen on the port specified by _port_.
+		then listen on the port specified by _port_. This path is relative to the chroot path.
+
+	include _path_
+		Includes the specified path as part of the configuration. Supposes wildcards *.
 
 ### Repo Settings
 
@@ -69,7 +81,7 @@ For each repository, individual settings may be applied:
 		Will match a URL accessed by: "https://<base_url>/var/gitrepos/myrepo.git/info/lfs"
 
 	root _path_
-		The root path to store LFS objects for this repository.
+		The root path to store LFS objects for this repository, relative to the chroot_path.
 
 	enable_authentication [yes|no]
 		Whether built-in authentication is turned on for this repository. One reason to turn this off is
