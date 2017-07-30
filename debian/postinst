@@ -44,7 +44,7 @@ then
 fi
 
 # create folders
-mkdir /var/git-lfs-server > /dev/null 2>&1 || true
-mkdir /var/git-lfs-server/empty > /dev/null 2>&1 || true
+install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-server
+install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-server/empty
 
 exit 0
