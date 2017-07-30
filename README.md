@@ -3,7 +3,7 @@
 *Warning: Not production ready*
 
 This is a lightweight implementation of a GIT LFS server using the v1 batch API.
-It can be run on it's own or as a FastCGI binary to plug into an existing webserver setup.
+It can be run on it's own or as a FastCGI binary for use with an existing webserver.
 
 ## Building from source
 
@@ -20,19 +20,19 @@ git-lfs-server --config=/etc/git-lfs-server.conf
 
 ## Configuration file
 
-The configuration file defines global settings and a list of repositories we'll be hosting for.
-Individual storage paths and credentials can be defined for each repository.
+The configuration file defines global settings for the server and a list of repositories.
 
 ### Global Settings
 
-Global settings which can be specified are defined here:
+Global settings are defined here:
 
 	base_url _url_
 		Set the base URL of your web server. i.e. "https://git.mydomain.com"
-		This will be the best URL used for generating download and upload links.
+		This will be the URL used for generating download and upload links for the
+		Git LFS client to upload and download objects.
 
 	port _number_
-		The listening port number. Not valid in FastCGI mode.
+		The listening port number. Ignored in FastCGI mode.
 
 	chroot_path _path_
 		Optional chroot to a folder. Repository LFS objects will be contained to this folder.
@@ -75,20 +75,21 @@ repo _name_
 For each repository, individual settings may be applied:
 
 	uri _uri_
-		Specify the URI to access this repository. This URI is matched to determine the access repository.
+		Specify the URI for this repository.
 		For eg.
 			uri "/var/gitrepos/myrepo.git/info/lfs"
-		Will match a URL accessed by: "https://<base_url>/var/gitrepos/myrepo.git/info/lfs"
+		If the _base_url_ is "https://www.example.com", then it will match
+		the URL: "https://www.example.com/var/gitrepos/myrepo.git/info/lfs"
 
 	root _path_
 		The root path to store LFS objects for this repository, relative to the chroot_path.
 
 	enable_authentication [yes|no]
 		Whether built-in authentication is turned on for this repository. One reason to turn this off is
-		if the webserver is handling the authentication.
+		if the webserver is handling the authentication when running as FastCGI.
 
 	auth_realm _name_
-		Authentication realm name.
+		Authentication realm name. Optional.
 
 	auth_file _path_
 		Path to a passwd file which contains credentials for users to access this repository. The passwd
