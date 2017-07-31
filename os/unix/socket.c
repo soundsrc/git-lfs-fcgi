@@ -71,6 +71,10 @@ int os_recv_with_file_descriptor(int socket, void *buffer, int size, int *fd)
 	}
 	
 	struct cmsghdr * cmsg = CMSG_FIRSTHDR(&msg);
+	if(!cmsg)
+	{
+		return -1;
+	}
 	memmove(fd, CMSG_DATA(cmsg), sizeof *fd);
 	
 	return ret;
