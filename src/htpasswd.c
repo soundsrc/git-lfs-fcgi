@@ -29,6 +29,9 @@ struct htpasswd *load_htpasswd_file(const char *filename)
 	if(!fp) return NULL;
 	
 	struct htpasswd *htp = calloc(1, sizeof *htp);
+	
+	SLIST_INIT(htp);
+
 	while(fgets(line, sizeof(line), fp))
 	{
 		line[sizeof(line) - 1] = 0;

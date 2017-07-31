@@ -503,6 +503,9 @@ static int handle_cmd_commit(struct repo_manager *mgr, uint32_t cookie, const st
 
 int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_config *config)
 {
+	LIST_INIT(&upload_list);
+	LIST_INIT(&access_token_list);
+
 	int ret = -1;
 	for(;;) {
 		struct repo_cmd_header hdr;

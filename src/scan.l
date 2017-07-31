@@ -71,6 +71,7 @@ int config_scan_pop_file()
 
 void config_scan_init(const char *filename)
 {
+	SLIST_INIT(&scan_stack);
 	config_scan_push_file(filename);
 }
 
