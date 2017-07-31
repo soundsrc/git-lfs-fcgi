@@ -277,11 +277,13 @@ int git_lfs_start_httpd(struct repo_manager *mgr, const struct git_lfs_config *c
 		
 		FCGX_Init();
 		
+		int saved_umask = os_umask(0);
 		int listening_socket = FCGX_OpenSocket(config->fastcgi_socket, 400);
 		if(listening_socket < 0) {
 			fprintf(stderr, "Failed to create socket.");
 			return -1;
 		}
+		os_umask(saved_umask);
 		
 		if(config->num_threads < 1 || config->num_threads > 256) {
 			fprintf(stderr, "Invalid number of threads (%d) specified.\n", config->num_threads);
