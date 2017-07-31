@@ -24,6 +24,7 @@ int os_rename(const char *src_path, const char *dest_path);
 int os_unlink(const char *path);
 int os_chroot(const char *path);
 int os_mkstemp(char *template_path);
+int os_umask(int mode);
 const char ** os_glob(const char *pattern, int *num_matches);
 
 #endif

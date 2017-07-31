@@ -75,6 +75,11 @@ int os_mkstemp(char *template_path)
 	return mkstemp(template_path);
 }
 
+int os_umask(int mode)
+{
+	return umask(mode);
+}
+
 const char ** os_glob(const char *pattern, int *num_matches)
 {
 	glob_t glob_results;
