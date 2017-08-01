@@ -26,6 +26,7 @@
 #include "os/mutex.h"
 #include "os/threads.h"
 #include "os/signal.h"
+#include "os/filesystem.h"
 #include "htpasswd.h"
 #include "git_lfs_server.h"
 #include "repo_manager.h"
