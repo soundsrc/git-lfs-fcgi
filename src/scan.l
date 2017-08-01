@@ -1,5 +1,6 @@
 %{
 #include <stdio.h>
+#include <stdarg.h>
 #include "os/filesystem.h"
 #include "compat/queue.h"
 #include "config_parser.y.h"
@@ -14,17 +15,23 @@ struct scan_state
 
 SLIST_HEAD(scan_state_stack, scan_state) scan_stack;
 
-int yyerror (const char *msg)
+int yyerror (const char *msg, ...)
 {
+	va_list va;
+	
+	va_start(va, msg);
+	
 	struct scan_state *head = SLIST_FIRST(&scan_stack);
 	if(head)
 	{
-		fprintf(stderr, "%s:%d: %s\n", head->filename, head->line_count, msg);
+		fprintf(stderr, "%s:%d: ", head->filename, head->line_count);
 	}
-	else
-	{
-		fprintf(stderr, "%s\n", msg);
-	}
+	
+	vfprintf(stderr, msg, va);
+	fprintf(stderr, "\n");
+
+	va_end(va);
+
 	return 0;
 }
 

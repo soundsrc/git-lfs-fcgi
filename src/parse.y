@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "compat/string.h"
 #include "compat/queue.h"
+#include "os/filesystem.h"
 #include "htpasswd.h"
 #include "configuration.h"
 
@@ -19,7 +20,7 @@ int config_parse_init(struct git_lfs_config *config)
 	return 1;
 }
 
-extern int yyerror (const char *msg);
+extern int yyerror (const char *msg, ...);
 %}
 
 %union {
@@ -121,6 +122,11 @@ repo_params_list
 
 repo_param
  	: ROOT STRING {
+		if(!os_is_directory($2))
+		{
+			yyerror("Directory \"%s\" does not exist.", $2);
+			YYERROR;
+		}
  		parse_repo->root_dir = strndup($2, sizeof($2));	
  	}
  	| URI STRING {
@@ -138,7 +144,7 @@ repo_param
 	| AUTH_FILE STRING {
 		parse_repo->auth = load_htpasswd_file($2);
 		if(!parse_repo->auth) {
-			yyerror("Unable to open htpasswd file.");
+			yyerror("Unable to open htpasswd file \"%s\".", $2);
 			YYERROR;
 		}
 	}
