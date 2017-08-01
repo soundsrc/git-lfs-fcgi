@@ -407,7 +407,22 @@ static void git_lfs_upload(struct repo_manager *mgr,
 	char buffer[4096];
 	int n;
 	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0) {
-		os_write(fd, buffer, n);
+		int actual = os_write(fd, buffer, n);
+		if(actual < 0)
+		{
+			switch(errno)
+			{
+				case EDQUOT:
+				case EFBIG:
+					git_lfs_write_error(io, 425, "Insufficient space on storage.");
+					os_close(fd);
+					return;
+				default:
+					git_lfs_write_error(io, 500, "Write IO error.");
+					os_close(fd);
+					return;
+			}
+		}
 	}
 
 	os_close(fd);
