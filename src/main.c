@@ -83,15 +83,38 @@ int main(int argc, char *argv[])
 	}
 	config->verbose = verbose;
 
-	if(verbose) {
-		if(config->fastcgi_server) {
+	if(verbose)
+	{
+		if(config->fastcgi_server)
+		{
 			printf("FastCGI enabled.\n");
 			printf("Socket Path: %s\n", config->fastcgi_socket);
 		}
-		if(config->chroot_path) {
-			printf("Chroot: %s\n", config->chroot_path);
-			printf("User: %s\n", config->user);
-			printf("Group: %s\n", config->group);
+		else
+		{
+			printf("HTTP Enabled on port %d\n", config->port);
+		}
+
+		printf("Base URL: %s\n", config->base_url);
+		printf("Chroot path: %s\n", config->chroot_path != NULL ? config->chroot_path : "(no chroot)");
+		printf("Main process chroot: %s\n", config->process_chroot);
+		printf("User: %s\n", config->user);
+		printf("Group: %s\n", config->group);
+		printf("Num threads: %d\n", config->num_threads);
+		printf("Verify: %s\n", config->verify_upload ? "yes" : "no");
+		printf("\n");
+		
+		struct git_lfs_repo *repo;
+		SLIST_FOREACH(repo, &config->repos, entries)
+		{
+			printf("Repo \"%s\"\n", repo->name);
+			printf("\tId: %d\n", repo->id);
+			printf("\tUri: %s\n", repo->uri);
+			printf("\tUrl: %s%s\n", config->base_url, repo->uri);
+			printf("\tRoot path: %s%s\n", config->chroot_path != NULL ? config->chroot_path : "", repo->root_dir);
+			printf("\tAuthentication: %s\n", repo->enable_authentication ? "yes" : "no");
+			if(repo->auth_realm) printf("\tAuth Realm: %s\n", repo->auth_realm);
+			printf("\n");
 		}
 	}
 	
