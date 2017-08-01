@@ -12,7 +12,7 @@
  */
 
 #ifndef lint
-static const char rcsid[] = "$Id: fcgi_stdio.c,v 1.14 2001/09/01 01:09:30 robs Exp $";
+//static const char rcsid[] = "$Id: fcgi_stdio.c,v 1.14 2001/09/01 01:09:30 robs Exp $";
 #endif /* not lint */
 
 #include <errno.h>  /* for errno */
