@@ -893,7 +893,7 @@ static int match_prefix(const char *pattern, int pattern_len, const char *str) {
   }
 
   i = j = 0;
-  res = -1;
+  //res = -1;
   for (; i < pattern_len; i++, j++) {
     if (pattern[i] == '?' && str[j] != '\0') {
       continue;
@@ -3396,6 +3396,8 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   FILE *in = NULL, *out = NULL;
   struct file fout = STRUCT_FILE_INITIALIZER;
   pid_t pid = (pid_t) -1;
+	
+  memset(&ri, 0, sizeof(ri));
 
   prepare_cgi_environment(conn, prog, &blk);
 
