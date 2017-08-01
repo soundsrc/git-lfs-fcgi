@@ -29,12 +29,15 @@ struct git_lfs_config *git_lfs_load_config(const char *path)
 
 	SLIST_INIT(&config->repos);
 
-	config_scan_init(path);
+	if(!config_scan_init(path))
+	{
+		goto error;
+	}
 	config_parse_init(config);
 
 	if(yyparse() != 0)
 	{
-		return NULL;
+		goto error;
 	}
 	
 	if(!config->user)
@@ -53,6 +56,9 @@ struct git_lfs_config *git_lfs_load_config(const char *path)
 	}
 
 	return config;
+error:
+	git_lfs_free_config(config);
+	return NULL;
 }
 
 void git_lfs_free_config(struct git_lfs_config *config)

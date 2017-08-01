@@ -18,6 +18,8 @@ int config_parse_init(struct git_lfs_config *config)
 	
 	return 1;
 }
+
+extern int yyerror (const char *msg);
 %}
 
 %union {
@@ -137,6 +139,7 @@ repo_param
 		parse_repo->auth = load_htpasswd_file($2);
 		if(!parse_repo->auth) {
 			yyerror("Unable to open htpasswd file.");
+			YYERROR;
 		}
 	}
  	;

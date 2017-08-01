@@ -19,11 +19,11 @@ int yyerror (const char *msg)
 	struct scan_state *head = SLIST_FIRST(&scan_stack);
 	if(head)
 	{
-		printf("%s:%d: %s\n", head->filename, head->line_count, msg);
+		fprintf(stderr, "%s:%d: %s\n", head->filename, head->line_count, msg);
 	}
 	else
 	{
-		printf("%s\n", msg);
+		fprintf(stderr, "%s\n", msg);
 	}
 	return 0;
 }
@@ -68,11 +68,10 @@ int config_scan_pop_file()
 	return 1;
 }
 
-
-void config_scan_init(const char *filename)
+int config_scan_init(const char *filename)
 {
 	SLIST_INIT(&scan_stack);
-	config_scan_push_file(filename);
+	return config_scan_push_file(filename);
 }
 
 static void config_scan_increment_line_count()
@@ -141,13 +140,16 @@ include { BEGIN(incl); }
 	const char **file_list = os_glob(inc_pattern, &num_files);
 	if(!file_list)
 	{
-		yyerror("Unable to include files.");
+		YY_FATAL_ERROR("Unable to include files.");
 	}
 	else
 	{
 		for(int i = num_files - 1; i >= 0; --i)
 		{
-			config_scan_push_file(file_list[i]);
+			if(!config_scan_push_file(file_list[i]))
+			{
+				YY_FATAL_ERROR("Include file failed.");
+			}
 		}
 		free(file_list);
 	}
