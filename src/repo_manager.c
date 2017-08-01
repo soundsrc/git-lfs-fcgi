@@ -41,6 +41,7 @@ struct upload_entry
 	char tmp_path[PATH_MAX];
 	uint8_t oid[32];
 	const struct git_lfs_repo *repo;
+	time_t expire;
 };
 
 static LIST_HEAD(upload_entry_list, upload_entry) upload_list;
@@ -366,6 +367,7 @@ static int handle_cmd_put_oid(struct repo_manager *mgr,
 	struct upload_entry *upload = calloc(1, sizeof *upload);
 	upload->repo = repo;
 	upload->id = next_upload_id++;
+	upload->expire = time(NULL) + 7200;
 	memcpy(upload->oid, oid, sizeof(upload->oid));
 	
 	if(snprintf(upload->tmp_path, sizeof(upload->tmp_path), "%s/XXXXXX", tmp_dir) >= sizeof(upload->tmp_path))
@@ -507,7 +509,26 @@ int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_
 	LIST_INIT(&access_token_list);
 
 	int ret = -1;
-	for(;;) {
+	time_t last_clean = 0;
+	for(;;)
+	{
+		// clean up upload tokens every 15 minutes
+		time_t now = time(NULL);
+		if(now >= last_clean + 60*15)
+		{
+			struct upload_entry *upload, *utmp;
+			LIST_FOREACH_SAFE(upload, &upload_list, entries, utmp)
+			{
+				if(now > upload->expire)
+				{
+					LIST_REMOVE(upload, entries);
+					os_unlink(upload->tmp_path);
+					free(upload);
+				}
+			}
+		}
+		
+		
 		struct repo_cmd_header hdr;
 		if(socket_read_fully(mgr->socket, &hdr, sizeof(hdr)) != sizeof(hdr))
 		{
