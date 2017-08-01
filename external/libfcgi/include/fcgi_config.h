@@ -76,3 +76,6 @@
 #	endif
 #endif
 
+#ifdef __APPLE__
+#define HAVE_SOCKLEN
+#endif
