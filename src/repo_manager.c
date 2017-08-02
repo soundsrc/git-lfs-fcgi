@@ -219,6 +219,7 @@ static int git_lfs_repo_send_response(struct repo_manager *mgr,
 									  int *fd)
 {
 	struct repo_cmd_header hdr;
+	memset(&hdr, 0, sizeof(hdr));
 	hdr.magic = REPO_CMD_MAGIC;
 	hdr.cookie = cookie;
 	hdr.type = type;
