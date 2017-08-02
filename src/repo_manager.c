@@ -523,6 +523,8 @@ int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_
 					free(upload);
 				}
 			}
+			
+			last_clean = now;
 		}
 		
 		
