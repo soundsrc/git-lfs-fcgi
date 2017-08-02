@@ -465,7 +465,7 @@ void git_lfs_server_handle_request(struct repo_manager *mgr,
 		if(!authorization_header)
 		{
 			char auth_header[512];
-			const char *auth_realm = "GIT-LFS Server";
+			const char *auth_realm = repo->name;
 			if(repo->auth_realm)
 			{
 				auth_realm = repo->auth_realm;
