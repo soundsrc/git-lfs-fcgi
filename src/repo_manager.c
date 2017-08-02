@@ -421,6 +421,8 @@ static int handle_cmd_commit(struct repo_manager *mgr, uint32_t cookie, const st
 		return 0;
 	}
 	
+	int ret = 0;
+	
 	char oid_str[65];
 	char dest_path[PATH_MAX];
 	
@@ -429,7 +431,7 @@ static int handle_cmd_commit(struct repo_manager *mgr, uint32_t cookie, const st
 	if(snprintf(dest_path, sizeof(dest_path), "%s/%.2s/", upload->repo->root_dir, oid_str) >= sizeof(dest_path))
 	{
 		git_lfs_repo_send_error_response(mgr, cookie, "Object %s could not be created. Path too long.", oid_str);
-		return 0;
+		goto done;
 	}
 	
 	if(!os_is_directory(dest_path))
@@ -437,14 +439,14 @@ static int handle_cmd_commit(struct repo_manager *mgr, uint32_t cookie, const st
 		if(os_mkdir(dest_path, 0700) < 0)
 		{
 			git_lfs_repo_send_error_response(mgr, cookie, "Object %s could not be created. Invalid path.", oid_str);
-			return 0;
+			goto done;
 		}
 	}
 	
 	if(strlcat(dest_path, oid_str + 2, sizeof(dest_path)) >= sizeof(dest_path))
 	{
 		git_lfs_repo_send_error_response(mgr, cookie, "Object %s could not be created. Path too long.", oid_str);
-		return 0;
+		goto done;
 	}
 	
 	if(config->verify_upload)
@@ -455,7 +457,7 @@ static int handle_cmd_commit(struct repo_manager *mgr, uint32_t cookie, const st
 		if(fd < 0)
 		{
 			git_lfs_repo_send_error_response(mgr, cookie, "Unable to open written file for object %s.", oid_str);
-			return 0;
+			goto done;
 		}
 		
 		SHA256_CTX ctx;
@@ -474,32 +476,28 @@ static int handle_cmd_commit(struct repo_manager *mgr, uint32_t cookie, const st
 			char actual_hash_str[65];
 			oid_to_string(sha256, actual_hash_str);
 			git_lfs_repo_send_error_response(mgr, cookie, "Object %s failed verification. Unexpected hash %s.", oid_str, actual_hash_str);
-			
-			LIST_REMOVE(upload, entries);
-			
-			os_unlink(upload->tmp_path);
-			free(upload);
-			
-			return 0;
+			goto done;
 		}
 		
 		if(os_rename(upload->tmp_path, dest_path) < 0)
 		{
 			git_lfs_repo_send_error_response(mgr, cookie, "Object %s failed rename.", oid_str);
-			return 0;
+			goto done;
 		}
-		
-		LIST_REMOVE(upload, entries);
-		os_unlink(upload->tmp_path);
-		free(upload);
 	}
 	
 	if(git_lfs_repo_send_response(mgr, REPO_CMD_COMMIT, cookie, NULL, 0, NULL) < 0)
 	{
-		return -1;
+		ret = -1;
+		goto done;
 	}
 	
-	return 0;
+done:
+	LIST_REMOVE(upload, entries);
+	os_unlink(upload->tmp_path);
+	free(upload);
+	
+	return ret;
 }
 
 int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_config *config)
