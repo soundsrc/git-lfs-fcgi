@@ -106,7 +106,7 @@ static int git_lfs_verify_access_token(const char *access_token)
 	struct git_lfs_access_token *token;
 	LIST_FOREACH(token, &access_token_list, entries)
 	{
-		if(time(NULL) < token->expire &&
+		if(time(NULL) <= token->expire &&
 		   0 == strncmp(token->token, access_token, sizeof(token->token)))
 		{
 			return 1;
