@@ -163,7 +163,8 @@ static int git_lfs_repo_send_request(struct repo_manager *mgr,
 	
 	os_mutex_lock(lock);
 
-	struct repo_cmd_header req_cmd, resp_cmd;
+	struct repo_cmd_header req_cmd;
+	memset(&req_cmd, 0, sizeof(req_cmd));
 	req_cmd.magic = REPO_CMD_MAGIC;
 	req_cmd.cookie = rand();
 	req_cmd.type = type;
@@ -176,6 +177,7 @@ static int git_lfs_repo_send_request(struct repo_manager *mgr,
 	if(socket_write_fully(mgr->socket, &req_cmd, sizeof(req_cmd)) != sizeof(req_cmd)) goto fail;
 	if(req_size > 0 && socket_write_fully(mgr->socket, req_data, req_size) != req_size) goto fail;
 	
+	struct repo_cmd_header resp_cmd;
 	// expect a reply
 	if(socket_read_fully(mgr->socket, &resp_cmd, sizeof(resp_cmd)) != sizeof(resp_cmd)) goto fail;
 	
@@ -397,7 +399,7 @@ static int handle_cmd_put_oid(struct repo_manager *mgr,
 	return 0;
 }
 
-static int handle_cmd_commit(struct repo_manager *mgr, uint32_t cookie, const struct git_lfs_config *config)
+static int handle_cmd_commit(struct repo_manager *mgr, const char *access_token, uint32_t cookie, const struct git_lfs_config *config)
 {
 	struct repo_cmd_commit_request request;
 	if(socket_read_fully(mgr->socket, &request, sizeof(request)) != sizeof(request))
@@ -405,6 +407,12 @@ static int handle_cmd_commit(struct repo_manager *mgr, uint32_t cookie, const st
 		return -1;
 	}
 	
+	if(!git_lfs_verify_access_token(access_token))
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "Invalid access token.");
+		return 0;
+	}
+
 	struct upload_entry *up, *upload = NULL;
 	LIST_FOREACH(up, &upload_list, entries)
 	{
@@ -538,14 +546,11 @@ int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_
 		{
 			goto terminate;
 		}
-		
-		if(hdr.type != REPO_CMD_AUTH && hdr.type != REPO_CMD_TERMINATE)
+
+		// access token must be NULL flushed
+		if(hdr.access_token[sizeof(hdr.access_token) - 1] != 0)
 		{
-			if(!git_lfs_verify_access_token(hdr.access_token))
-			{
-				git_lfs_repo_send_error_response(mgr, hdr.cookie, "Invalid access token.");
-				continue;
-			}
+			goto terminate;
 		}
 		
 		switch(hdr.type) {
@@ -559,6 +564,12 @@ int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_
 				struct repo_oid_cmd_data data;
 				if(socket_read_fully(mgr->socket, &data, sizeof(data)) != sizeof(data)) {
 					goto terminate;
+				}
+				
+				if(!git_lfs_verify_access_token(hdr.access_token))
+				{
+					git_lfs_repo_send_error_response(mgr, hdr.cookie, "Invalid access token.");
+					continue;
 				}
 				
 				struct git_lfs_repo *repo = find_repo_by_id(config, data.repo_id);
@@ -591,7 +602,7 @@ int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_
 			}
 				break;
 			case REPO_CMD_COMMIT:
-				handle_cmd_commit(mgr, hdr.cookie, config);
+				if(handle_cmd_commit(mgr, hdr.access_token, hdr.cookie, config) < 0) goto terminate;
 				break;
 			case REPO_CMD_TERMINATE:
 				git_lfs_repo_send_response(mgr, REPO_CMD_TERMINATE, hdr.cookie, NULL, 0, NULL);
