@@ -94,7 +94,7 @@ static void git_lfs_cleanup_access_tokens()
 	time_t now = time(NULL);
 	LIST_FOREACH_SAFE(access_token, &access_token_list, entries, tmp)
 	{
-		if(access_token->expire > now) {
+		if(now > access_token->expire) {
 			LIST_REMOVE(access_token, entries);
 			free(access_token);
 		}
