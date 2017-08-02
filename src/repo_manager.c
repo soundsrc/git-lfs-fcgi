@@ -63,13 +63,11 @@ static struct git_lfs_access_token *git_lfs_add_access_token(const struct git_lf
 {
 	static const char ch[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 	struct git_lfs_access_token *access_token;
-	
-	time_t now = time(NULL);
 
 	// find existing access token
 	LIST_FOREACH(access_token, &access_token_list, entries)
 	{
-		if(now < access_token->expire)
+		if(expires_at < access_token->expire)
 		{
 			return access_token;
 		}
