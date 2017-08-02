@@ -290,9 +290,10 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr,
 				char download_url[1024];
 				
 				if(snprintf(download_url, sizeof(download_url), "%s/%s/download/%s", config->base_url, repo->uri, oid_str) >= (long)sizeof(download_url)) {
-					git_lfs_write_error(io, 400, "Download URL is too long.");
-					json_object_put(obj_info);
-					goto error1;
+					struct json_object *error = create_json_error(400, "Download URL is too long.");
+					json_object_object_add(obj_info, "error", error);
+					json_object_array_add(output_objects, obj_info);
+					continue;
 				}
 				
 				struct json_object *download = json_object_new_object();
