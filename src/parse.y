@@ -122,11 +122,6 @@ repo_params_list
 
 repo_param
  	: ROOT STRING {
-		if(!os_is_directory($2))
-		{
-			yyerror("Directory \"%s\" does not exist.", $2);
-			YYERROR;
-		}
  		parse_repo->root_dir = strndup($2, sizeof($2));	
  	}
  	| URI STRING {
