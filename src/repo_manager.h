@@ -38,7 +38,10 @@ enum repo_cmd_type
 	REPO_CMD_PUT_OID,
 	REPO_CMD_COMMIT,
 	REPO_CMD_TERMINATE,
-	REPO_CMD_ERROR
+	REPO_CMD_ERROR,
+	REPO_CMD_CREATE_LOCK,
+	REPO_CMD_LIST_LOCKS,
+	REPO_CMD_RELEASE_LOCK
 };
 
 #define REPO_CMD_MAGIC 0xa733f97f
@@ -95,6 +98,44 @@ struct repo_cmd_commit_request
 struct repo_cmd_error_response
 {
 	char message[128];
+};
+
+struct repo_cmd_create_lock_request
+{
+	char path[1024];
+	char username[33];
+};
+
+struct repo_cmd_create_lock_response
+{
+	int successful;
+	int64_t id;
+	char username[33];
+	char path[1024];
+	time_t locked_at;
+};
+
+struct repo_cmd_list_locks_request
+{
+	char path[1024];
+	uint8_t uuid[16];
+	int cursor;
+	int limit;
+};
+
+struct repo_cmd_release_lock_request
+{
+	uint8_t uuid[16];
+	int force;
+};
+
+struct repo_cmd_release_lock_response
+{
+	int successful;
+	int64_t id;
+	char username[33];
+	char path[1024];
+	time_t locked_at;
 };
 
 struct repo_manager *repo_manager_create(int socket);

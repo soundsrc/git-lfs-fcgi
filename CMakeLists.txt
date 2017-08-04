@@ -150,6 +150,7 @@ set(LIB_FILES
 	"mongoose"
 	"json-c"
 	"fcgi"
+	"sqlite"
 	"pthread")
 
 if(OPENSSL_FOUND)

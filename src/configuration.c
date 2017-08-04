@@ -16,6 +16,7 @@
 #include "configuration.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "sqlite3.h"
 #include "compat/string.h"
 #include "compat/queue.h"
 
@@ -75,6 +76,7 @@ void git_lfs_free_config(struct git_lfs_config *config)
 		struct git_lfs_repo *repo = SLIST_FIRST(&config->repos);
 		SLIST_REMOVE_HEAD(&config->repos, entries);
 		
+		sqlite3_close(repo->locks_db);
 		free(repo->auth_realm);
 		free(repo->auth);
 		free(repo->name);

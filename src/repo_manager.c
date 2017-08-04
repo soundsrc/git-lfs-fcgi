@@ -508,10 +508,180 @@ done:
 	return ret;
 }
 
+static int create_or_load_locks_db(struct git_lfs_repo *repo)
+{
+	if(!repo->locks_db)
+	{
+		char locks_path[1024];
+		
+		if(snprintf(locks_path, sizeof(locks_path), "%s/locks/", repo->root_dir) >= sizeof(locks_path))
+		{
+			return -1;
+		}
+		
+		if(!os_is_directory(locks_path))
+		{
+			if(os_mkdir(locks_path, 0700) < 0)
+			{
+				return -1;
+			}
+		}
+		
+		if(strlcat(locks_path, "locks.db", sizeof(locks_path)) >= sizeof(locks_path))
+		{
+			return -1;
+		}
+		
+		if(SQLITE_OK != sqlite3_open(locks_path, &repo->locks_db))
+		{
+			goto error;
+		}
+		
+		char *err_msg;
+		sqlite3_exec(repo->locks_db, "CREATE TABLE locks (id INTEGER PRIMARY KEY, path VARCHAR(1024) UNIQUE, locked_at INTEGER, owner VARCHAR(64));", NULL, NULL, &err_msg);
+#if 0
+		char create_lock[] = "INSERT INTO locks VALUES(?,?,?,?)";
+		if(SQLITE_OK != sqlite3_prepare(repo->lock_db, create_lock, sizeof(create_lock) - 1, &repo->create_stmt))
+		{
+			goto error;
+		}
+		
+		char delete_lock[] = "DELETE FROM locks WHERE id=?";
+		if(SQLITE_OK != sqlite3_prepare(repo->lock_db, delete_stmt, sizeof(delete_stmt) - 1, &repo->delete_stmt))
+		{
+			goto error;
+		}
+#endif
+	}
+	
+	return 0;
+error:
+	sqlite3_close(repo->locks_db);
+	return -1;
+}
+
+static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_token, uint32_t cookie, struct git_lfs_repo *repo)
+{
+	struct repo_cmd_create_lock_request request;
+	struct repo_cmd_create_lock_response response;
+	char error_msg[128];
+	
+	memset(&response, 0, sizeof(response));
+	if(socket_read_fully(mgr->socket, &request, sizeof(request)) != sizeof(request))
+	{
+		return -1;
+	}
+	
+	if(!git_lfs_verify_access_token(access_token))
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "Invalid access token.");
+		return 0;
+	}
+	
+	// request parameters be NULL initialized
+	if(request.path[sizeof(request.path) - 1] != 0)
+	{
+		return -1;
+	}
+	
+	if(request.username[sizeof(request.username) - 1] != 0)
+	{
+		return -1;
+	}
+
+	sqlite3_stmt *stmt;
+	// check if lock exists already
+
+	if(SQLITE_OK != sqlite3_prepare_v2(repo->locks_db, "SELECT (id, path, locked_at, owner) FROM locks WHERE path=?", -1, &stmt, NULL))
+	{
+		return -1;
+	}
+	if(SQLITE_OK != sqlite3_bind_text(stmt, 0, request.path, -1, NULL)) goto error;
+	if(SQLITE_ROW == sqlite3_step(stmt))
+	{
+		// send lock exists response
+		response.successful = 0;
+		
+		response.id = sqlite3_column_int64(stmt, 0);
+		if(strlcpy(response.path, (const char *)sqlite3_column_text(stmt, 1), sizeof(response.path)) >= sizeof(response.path))
+		{
+			goto error;
+		}
+		response.locked_at = sqlite3_column_int(stmt, 2);
+		if(strlcpy(response.username, (const char *)sqlite3_column_text(stmt, 3), sizeof(response.username)) >= sizeof(response.username))
+		{
+			goto error;
+		}
+		
+		if(socket_write_fully(mgr->socket, &response, sizeof(response)) != sizeof(response))
+		{
+			goto error;
+		}
+
+		sqlite3_finalize(stmt);
+		return 0;
+	}
+	sqlite3_finalize(stmt);
+	
+	if(SQLITE_OK != sqlite3_prepare_v2(repo->locks_db, "INSERT INTO locks VALUES(?,?,?,?)", -1, &stmt, NULL))
+	{
+		return -1;
+	}
+	
+	response.id = sqlite3_last_insert_rowid(repo->locks_db) + 1;
+	if(strlcpy(response.path, (const char *)sqlite3_column_text(stmt, 1), sizeof(response.path)) >= sizeof(response.path))
+	{
+		goto error;
+	}
+	response.locked_at = time(NULL);
+	if(strlcpy(response.username, (const char *)sqlite3_column_text(stmt, 3), sizeof(response.username)) >= sizeof(response.username))
+	{
+		goto error;
+	}
+
+	if(SQLITE_OK != sqlite3_bind_int64(stmt, 0, response.id)) return -1;
+	if(SQLITE_OK != sqlite3_bind_text(stmt, 1, request.path, -1, NULL)) return -1;
+	if(SQLITE_OK != sqlite3_bind_int(stmt, 2, response.locked_at)) return -1;
+	if(SQLITE_OK != sqlite3_bind_text(stmt, 3, request.username, -1, NULL)) return -1;
+	
+	if(SQLITE_DONE != sqlite3_step(stmt))
+	{
+		snprintf(error_msg, sizeof(error_msg), "Failed to create lock.");
+		goto internal_server_error;
+	}
+
+	response.successful = 1;
+	
+	if(socket_write_fully(mgr->socket, &response, sizeof(response)) != sizeof(response))
+	{
+		goto error;
+	}
+
+	return 0;
+error:
+	sqlite3_finalize(stmt);
+	return -1;
+internal_server_error:
+	sqlite3_finalize(stmt);
+	git_lfs_repo_send_error_response(mgr, cookie, "%s", error_msg);
+	return 0;
+}
+
 int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_config *config)
 {
 	LIST_INIT(&upload_list);
 	LIST_INIT(&access_token_list);
+
+	
+	// initialize locks dbs
+	struct git_lfs_repo *repo;
+	SLIST_FOREACH(repo, &config->repos, entries)
+	{
+		if(create_or_load_locks_db(repo) < 0)
+		{
+			return -1;
+		}
+	}
 
 	int ret = -1;
 	time_t last_clean = 0;
@@ -608,6 +778,8 @@ int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_
 				git_lfs_repo_send_response(mgr, REPO_CMD_TERMINATE, hdr.cookie, NULL, 0, NULL);
 				goto terminate;
 				break;
+			case REPO_CMD_CREATE_LOCK:
+				if(handle_cmd_create_lock(mgr, hdr.access_token, hdr.cookie, repo) < 0) goto terminate;
 			default:
 				break;
 		}
