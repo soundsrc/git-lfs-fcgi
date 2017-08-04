@@ -58,6 +58,11 @@ add_library(json-c STATIC
 	"external/json-c/random_seed.h"
 )
 
+add_library(sqlite STATIC
+	"external/sqlite/sqlite3.c"
+	"external/sqlite/sqlite3.h"
+)
+
 add_library(fcgi STATIC
 	"external/libfcgi/libfcgi/fcgiapp.c"
 	"external/libfcgi/libfcgi/fcgi_stdio.c"
@@ -138,6 +143,7 @@ SET(INC_DIRS
 	"${CMAKE_CURRENT_SOURCE_DIR}/external/mongoose"
 	"${CMAKE_CURRENT_SOURCE_DIR}/external/json-c"
 	"${CMAKE_CURRENT_SOURCE_DIR}/external/libfcgi/include"
+	"${CMAKE_CURRENT_SOURCE_DIR}/external/sqlite"
 )
 
 set(LIB_FILES
