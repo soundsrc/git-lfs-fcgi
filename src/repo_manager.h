@@ -222,4 +222,15 @@ int git_lfs_repo_create_lock(struct repo_manager *mgr,
 							 char *error_msg,
 							 size_t error_msg_buf_len);
 
+int git_lfs_repo_list_locks(struct repo_manager *mgr,
+							const struct git_lfs_repo *repo,
+							int cursor,
+							int limit,
+							const char *path,
+							int64_t *id,
+							struct repo_cmd_list_lock_info **out_lock_info,
+							int *out_next_cursor,
+							char *error_msg,
+							size_t error_msg_buf_len);
+
 #endif /* repo_manager_h */

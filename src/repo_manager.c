@@ -1301,3 +1301,74 @@ int git_lfs_repo_create_lock(struct repo_manager *mgr,
 	return git_lfs_repo_send_request(mgr, REPO_CMD_CREATE_LOCK, mgr->access_token, &request, sizeof(request), out_response, sizeof *out_response, NULL, error_msg, error_msg_buf_len);
 }
 
+int git_lfs_repo_list_locks(struct repo_manager *mgr,
+							const struct git_lfs_repo *repo,
+							int cursor,
+							int limit,
+							const char *path,
+							int64_t *id,
+							struct repo_cmd_list_lock_info **out_lock_info,
+							int *out_next_cursor,
+							char *error_msg,
+							size_t error_msg_buf_len)
+{
+	int ret = -1;
+	struct repo_cmd_list_locks_request request;
+	memset(&request, 0, sizeof(request));
+	
+	request.repo_id = repo->id;
+	if(path)
+	{
+		if(strlcpy(request.path, path, sizeof(request.path)) >= sizeof(request.path))
+		{
+			return -1;
+		}
+	}
+	request.cursor = cursor;
+	request.limit = limit;
+	request.id = id ? *id :-1;
+	
+	struct repo_cmd_list_locks_response *response = malloc(sizeof *response + LIST_LOCKS_LIMIT * sizeof(response->locks[0]));
+	if(git_lfs_repo_send_request(mgr, REPO_CMD_LIST_LOCKS, mgr->access_token, &request, sizeof(request), response, sizeof *response, NULL, error_msg, error_msg_buf_len) < 0)
+	{
+		goto error;
+	}
+	
+	int n = response->num_locks;
+	if(n < 0 || n > LIST_LOCKS_LIMIT)
+	{
+		goto error;
+	}
+
+	if(socket_read_fully(mgr->socket, &response->locks[0], n * sizeof(response->locks[0])) != n * sizeof(response->locks[0]))
+	{
+		goto error;
+	}
+	
+	*out_next_cursor = response->next_cursor;
+	*out_lock_info = calloc(n, sizeof **out_lock_info);
+	
+	for(int i = 0; i < response->num_locks; i++)
+	{
+		struct repo_cmd_list_lock_info *info = &(*out_lock_info)[i];
+		*info = response->locks[i];
+
+		if(info->path[sizeof(info->path) - 1] != 0)
+		{
+			free(*out_lock_info);
+			goto error;
+		}
+		
+		if(info->username[sizeof(info->username) - 1] != 0)
+		{
+			free(*out_lock_info);
+			goto error;
+		}
+	}
+	
+	ret = 0;
+error:
+	free(response);
+	return ret;
+}
+
