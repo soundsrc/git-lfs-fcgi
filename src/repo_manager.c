@@ -734,7 +734,7 @@ static int handle_list_locks(struct repo_manager *mgr, const char *access_token,
 	
 	if(request.path[0])
 	{
-		if(strlcpy(filter_query, "path=?", sizeof(filter_query)) >= sizeof(filter_query))
+		if(strlcat(filter_query, "path=?", sizeof(filter_query)) >= sizeof(filter_query))
 		{
 			goto error0;
 		}
@@ -744,12 +744,12 @@ static int handle_list_locks(struct repo_manager *mgr, const char *access_token,
 	{
 		if(request.path[0])
 		{
-			if(strlcpy(filter_query, " AND ", sizeof(filter_query)) >= sizeof(filter_query))
+			if(strlcat(filter_query, " AND ", sizeof(filter_query)) >= sizeof(filter_query))
 			{
 				goto error0;
 			}
 		}
-		if(strlcpy(filter_query, "id=?", sizeof(filter_query)) >= sizeof(filter_query))
+		if(strlcat(filter_query, "id=?", sizeof(filter_query)) >= sizeof(filter_query))
 		{
 			goto error0;
 		}
