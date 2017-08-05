@@ -233,4 +233,13 @@ int git_lfs_repo_list_locks(struct repo_manager *mgr,
 							char *error_msg,
 							size_t error_msg_buf_len);
 
+int git_lfs_repo_delete_lock(struct repo_manager *mgr,
+							 const struct git_lfs_repo *repo,
+							 const char *username,
+							 int64_t id,
+							 int force,
+							 struct repo_cmd_delete_lock_response *response,
+							 char *error_msg,
+							 size_t error_msg_buf_len);
+
 #endif /* repo_manager_h */

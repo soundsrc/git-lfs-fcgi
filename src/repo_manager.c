@@ -1372,3 +1372,25 @@ error:
 	return ret;
 }
 
+int git_lfs_repo_delete_lock(struct repo_manager *mgr,
+							 const struct git_lfs_repo *repo,
+							 const char *username,
+							 int64_t id,
+							 int force,
+							 struct repo_cmd_delete_lock_response *response,
+							 char *error_msg,
+							 size_t error_msg_buf_len)
+{
+	struct repo_cmd_delete_lock_request request;
+	memset(&request, 0, sizeof(request));
+	
+	request.repo_id = repo->id;
+	request.force = force;
+	request.id = id;
+	if(strlcpy(request.username, username, sizeof(request.username)) >= sizeof(request.username))
+	{
+		return -1;
+	}
+	
+	return git_lfs_repo_send_request(mgr, REPO_CMD_DELETE_LOCK, mgr->access_token, &request, sizeof(request), response, sizeof *response, NULL, error_msg, error_msg_buf_len);
+}
