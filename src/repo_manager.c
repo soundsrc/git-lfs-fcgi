@@ -1158,7 +1158,11 @@ int git_lfs_repo_authenticate(struct repo_manager *mgr,
 		return -1;
 	}
 	
-	response.access_token[sizeof(response.access_token) - 1] = 0;
+	if(response.access_token[sizeof(response.access_token) - 1] != 0)
+	{
+		return -1;
+	}
+
 	strlcpy(access_token, response.access_token, sizeof(response.access_token));
 	*expire = response.expire;
 
@@ -1217,6 +1221,12 @@ int git_lfs_repo_get_read_oid_fd(struct repo_manager *mgr,
 		return -1;
 	}
 	
+	if(response.content_length < 0)
+	{
+		os_close(*fd);
+		return -1;
+	}
+
 	*size = response.content_length;
 	
 	return 0;
@@ -1298,7 +1308,27 @@ int git_lfs_repo_create_lock(struct repo_manager *mgr,
 		return -1;
 	}
 
-	return git_lfs_repo_send_request(mgr, REPO_CMD_CREATE_LOCK, mgr->access_token, &request, sizeof(request), out_response, sizeof *out_response, NULL, error_msg, error_msg_buf_len);
+	if(git_lfs_repo_send_request(mgr, REPO_CMD_CREATE_LOCK, mgr->access_token, &request, sizeof(request), out_response, sizeof *out_response, NULL, error_msg, error_msg_buf_len) < 0)
+	{
+		return -1;
+	}
+	
+	if(out_response->id < 0)
+	{
+		return -1;
+	}
+
+	if(out_response->path[sizeof(out_response->path) - 1] != 0)
+	{
+		return -1;
+	}
+	
+	if(out_response->username[sizeof(out_response->username) - 1] != 0)
+	{
+		return -1;
+	}
+	
+	return 0;
 }
 
 int git_lfs_repo_list_locks(struct repo_manager *mgr,
@@ -1392,5 +1422,20 @@ int git_lfs_repo_delete_lock(struct repo_manager *mgr,
 		return -1;
 	}
 	
-	return git_lfs_repo_send_request(mgr, REPO_CMD_DELETE_LOCK, mgr->access_token, &request, sizeof(request), response, sizeof *response, NULL, error_msg, error_msg_buf_len);
+	if(git_lfs_repo_send_request(mgr, REPO_CMD_DELETE_LOCK, mgr->access_token, &request, sizeof(request), response, sizeof *response, NULL, error_msg, error_msg_buf_len) < 0)
+	{
+		return -1;
+	}
+	
+	if(response->path[sizeof(response->path) - 1] != 0)
+	{
+		return -1;
+	}
+	
+	if(response->username[sizeof(response->username) - 1] != 0)
+	{
+		return -1;
+	}
+	
+	return 0;
 }
