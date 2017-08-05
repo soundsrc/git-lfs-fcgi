@@ -809,7 +809,7 @@ static int handle_list_locks(struct repo_manager *mgr, const char *access_token,
 	}
 	
 	response->num_locks = row_count;
-	response->next_cursor = -1;
+	response->next_cursor = 0;
 	if(row_count >= request.limit)
 	{
 		response->next_cursor = request.cursor + row_count;
