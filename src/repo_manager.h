@@ -143,13 +143,13 @@ struct repo_cmd_list_locks_response
 	struct repo_cmd_list_lock_info locks[];
 };
 
-struct repo_cmd_release_lock_request
+struct repo_cmd_delete_lock_request
 {
-	uint8_t uuid[16];
+	int64_t id;
 	int force;
 };
 
-struct repo_cmd_release_lock_response
+struct repo_cmd_delete_lock_response
 {
 	int successful;
 	int64_t id;
