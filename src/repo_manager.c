@@ -1274,3 +1274,30 @@ int git_lfs_repo_terminate_service(struct repo_manager *mgr)
 {
 	return git_lfs_repo_send_request(mgr, REPO_CMD_TERMINATE, "", NULL, 0, NULL, 0, NULL, NULL, 0);
 }
+
+int git_lfs_repo_create_lock(struct repo_manager *mgr,
+							 const struct git_lfs_repo *repo,
+							 const char *username,
+							 const char *path,
+							 struct repo_cmd_create_lock_response *out_response,
+							 char *error_msg,
+							 size_t error_msg_buf_len)
+{
+	struct repo_cmd_create_lock_request request;
+	memset(&request, 0, sizeof(request));
+	
+	request.repo_id = repo->id;
+
+	if(strlcpy(request.username, username, sizeof(request.username)) >= sizeof(request.username))
+	{
+		return -1;
+	}
+	
+	if(strlcpy(request.path, username, sizeof(request.path)) >= sizeof(request.path))
+	{
+		return -1;
+	}
+
+	return git_lfs_repo_send_request(mgr, REPO_CMD_CREATE_LOCK, mgr->access_token, &request, sizeof(request), out_response, sizeof *out_response, NULL, error_msg, error_msg_buf_len);
+}
+

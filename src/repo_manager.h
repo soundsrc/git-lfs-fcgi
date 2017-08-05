@@ -214,4 +214,12 @@ int git_lfs_repo_commit(struct repo_manager *mgr,
 
 int git_lfs_repo_terminate_service(struct repo_manager *mgr);
 
+int git_lfs_repo_create_lock(struct repo_manager *mgr,
+							 const struct git_lfs_repo *repo,
+							 const char *username,
+							 const char *path,
+							 struct repo_cmd_create_lock_response *out_response,
+							 char *error_msg,
+							 size_t error_msg_buf_len);
+
 #endif /* repo_manager_h */
