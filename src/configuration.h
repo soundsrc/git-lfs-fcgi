@@ -18,7 +18,6 @@
 #define CONFIGURATION_H
 
 #include <stdint.h>
-#include "sqlite3.h"
 #include "compat/queue.h"
 
 #ifndef PATH_MAX
@@ -38,12 +37,6 @@ struct git_lfs_repo
 	int enable_authentication;
 	char *auth_realm;
 	struct htpasswd *auth;
-	
-	// internal use
-	sqlite3 *locks_db;
-	sqlite3_stmt *create_stmt;
-	sqlite3_stmt *list_stmt;
-	sqlite3_stmt *delete_stmt;
 };
 
 SLIST_HEAD(git_lfs_repo_list, git_lfs_repo);

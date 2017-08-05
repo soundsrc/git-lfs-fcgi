@@ -102,6 +102,7 @@ struct repo_cmd_error_response
 
 struct repo_cmd_create_lock_request
 {
+	int repo_id;
 	char path[1024];
 	char username[33];
 };

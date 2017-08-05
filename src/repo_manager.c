@@ -20,6 +20,7 @@
 #include <stdarg.h>
 #include <time.h>
 #include <openssl/sha.h>
+#include "sqlite3.h"
 #include "compat/string.h"
 #include "compat/queue.h"
 #include "os/mutex.h"
@@ -101,12 +102,13 @@ static void git_lfs_cleanup_access_tokens()
 	}
 }
 
-static int git_lfs_verify_access_token(const char *access_token)
+static int git_lfs_verify_access_token(const char *access_token, int repo_id)
 {
 	struct git_lfs_access_token *token;
 	LIST_FOREACH(token, &access_token_list, entries)
 	{
-		if(time(NULL) <= token->expire &&
+		if(token->repo->id == repo_id &&
+		   time(NULL) <= token->expire &&
 		   0 == strncmp(token->token, access_token, sizeof(token->token)))
 		{
 			return 1;
@@ -406,12 +408,6 @@ static int handle_cmd_commit(struct repo_manager *mgr, const char *access_token,
 	{
 		return -1;
 	}
-	
-	if(!git_lfs_verify_access_token(access_token))
-	{
-		git_lfs_repo_send_error_response(mgr, cookie, "Invalid access token.");
-		return 0;
-	}
 
 	struct upload_entry *up, *upload = NULL;
 	LIST_FOREACH(up, &upload_list, entries)
@@ -422,10 +418,16 @@ static int handle_cmd_commit(struct repo_manager *mgr, const char *access_token,
 			break;
 		}
 	}
-	
+
 	if(!upload)
 	{
 		git_lfs_repo_send_error_response(mgr, cookie, "Invalid upload ticket.");
+		return 0;
+	}
+	
+	if(!git_lfs_verify_access_token(access_token, upload->repo->id))
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "Invalid access token.");
 		return 0;
 	}
 	
@@ -508,71 +510,67 @@ done:
 	return ret;
 }
 
-static int create_or_load_locks_db(struct git_lfs_repo *repo)
+static sqlite3 *open_or_create_locks_db(struct git_lfs_repo *repo)
 {
-	if(!repo->locks_db)
+	char locks_path[1024];
+	
+	if(snprintf(locks_path, sizeof(locks_path), "%s/locks/", repo->root_dir) >= sizeof(locks_path))
 	{
-		char locks_path[1024];
-		
-		if(snprintf(locks_path, sizeof(locks_path), "%s/locks/", repo->root_dir) >= sizeof(locks_path))
-		{
-			return -1;
-		}
-		
-		if(!os_is_directory(locks_path))
-		{
-			if(os_mkdir(locks_path, 0700) < 0)
-			{
-				return -1;
-			}
-		}
-		
-		if(strlcat(locks_path, "locks.db", sizeof(locks_path)) >= sizeof(locks_path))
-		{
-			return -1;
-		}
-		
-		if(SQLITE_OK != sqlite3_open(locks_path, &repo->locks_db))
-		{
-			goto error;
-		}
-		
-		char *err_msg;
-		sqlite3_exec(repo->locks_db, "CREATE TABLE locks (id INTEGER PRIMARY KEY, path VARCHAR(1024) UNIQUE, locked_at INTEGER, owner VARCHAR(64));", NULL, NULL, &err_msg);
-#if 0
-		char create_lock[] = "INSERT INTO locks VALUES(?,?,?,?)";
-		if(SQLITE_OK != sqlite3_prepare(repo->lock_db, create_lock, sizeof(create_lock) - 1, &repo->create_stmt))
-		{
-			goto error;
-		}
-		
-		char delete_lock[] = "DELETE FROM locks WHERE id=?";
-		if(SQLITE_OK != sqlite3_prepare(repo->lock_db, delete_stmt, sizeof(delete_stmt) - 1, &repo->delete_stmt))
-		{
-			goto error;
-		}
-#endif
+		return NULL;
 	}
 	
+	if(!os_is_directory(locks_path))
+	{
+		if(os_mkdir(locks_path, 0700) < 0)
+		{
+			return NULL;
+		}
+	}
+		
+	if(strlcat(locks_path, "locks.db", sizeof(locks_path)) >= sizeof(locks_path))
+	{
+		return NULL;
+	}
+	
+	int should_create = os_file_exists(locks_path);
+	sqlite3 *db;
+	if(SQLITE_OK != sqlite3_open(locks_path, &db))
+	{
+		goto error;
+	}
+
+	if(should_create)
+	{
+		char *err_msg;
+		sqlite3_exec(db, "CREATE TABLE locks (id INTEGER PRIMARY KEY, path VARCHAR(1024) UNIQUE, locked_at INTEGER, owner VARCHAR(64));", NULL, NULL, &err_msg);
+	}
+
 	return 0;
 error:
-	sqlite3_close(repo->locks_db);
+	sqlite3_close(db);
 	return -1;
 }
 
-static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_token, uint32_t cookie, struct git_lfs_repo *repo)
+static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_token, uint32_t cookie, const struct git_lfs_config *config)
 {
 	struct repo_cmd_create_lock_request request;
 	struct repo_cmd_create_lock_response response;
 	char error_msg[128];
-	
+
 	memset(&response, 0, sizeof(response));
 	if(socket_read_fully(mgr->socket, &request, sizeof(request)) != sizeof(request))
 	{
 		return -1;
 	}
 	
-	if(!git_lfs_verify_access_token(access_token))
+	struct git_lfs_repo *repo = find_repo_by_id(config, request.repo_id);
+	if(!repo)
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "No repo found at this URL.");
+		return 0;
+	}
+
+	if(!git_lfs_verify_access_token(access_token, request.repo_id))
 	{
 		git_lfs_repo_send_error_response(mgr, cookie, "Invalid access token.");
 		return 0;
@@ -589,10 +587,17 @@ static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_t
 		return -1;
 	}
 
+	sqlite3 *db = open_or_create_locks_db(repo);
+	if(!db)
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "Unable to open locks database.");
+		return 0;
+	}
+
 	sqlite3_stmt *stmt;
 	// check if lock exists already
 
-	if(SQLITE_OK != sqlite3_prepare_v2(repo->locks_db, "SELECT (id, path, locked_at, owner) FROM locks WHERE path=?", -1, &stmt, NULL))
+	if(SQLITE_OK != sqlite3_prepare_v2(db, "SELECT (id, path, locked_at, owner) FROM locks WHERE path=?", -1, &stmt, NULL))
 	{
 		return -1;
 	}
@@ -623,12 +628,12 @@ static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_t
 	}
 	sqlite3_finalize(stmt);
 	
-	if(SQLITE_OK != sqlite3_prepare_v2(repo->locks_db, "INSERT INTO locks VALUES(?,?,?,?)", -1, &stmt, NULL))
+	if(SQLITE_OK != sqlite3_prepare_v2(db, "INSERT INTO locks VALUES(?,?,?,?)", -1, &stmt, NULL))
 	{
 		return -1;
 	}
 	
-	response.id = sqlite3_last_insert_rowid(repo->locks_db) + 1;
+	response.id = sqlite3_last_insert_rowid(db) + 1;
 	if(strlcpy(response.path, (const char *)sqlite3_column_text(stmt, 1), sizeof(response.path)) >= sizeof(response.path))
 	{
 		goto error;
@@ -657,12 +662,16 @@ static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_t
 		goto error;
 	}
 
+	sqlite3_close(db);
+	
 	return 0;
 error:
 	sqlite3_finalize(stmt);
+	sqlite3_close(db);
 	return -1;
 internal_server_error:
 	sqlite3_finalize(stmt);
+	sqlite3_close(db);
 	git_lfs_repo_send_error_response(mgr, cookie, "%s", error_msg);
 	return 0;
 }
@@ -671,17 +680,6 @@ int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_
 {
 	LIST_INIT(&upload_list);
 	LIST_INIT(&access_token_list);
-
-	
-	// initialize locks dbs
-	struct git_lfs_repo *repo;
-	SLIST_FOREACH(repo, &config->repos, entries)
-	{
-		if(create_or_load_locks_db(repo) < 0)
-		{
-			return -1;
-		}
-	}
 
 	int ret = -1;
 	time_t last_clean = 0;
@@ -736,7 +734,7 @@ int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_
 					goto terminate;
 				}
 				
-				if(!git_lfs_verify_access_token(hdr.access_token))
+				if(!git_lfs_verify_access_token(hdr.access_token, data.repo_id))
 				{
 					git_lfs_repo_send_error_response(mgr, hdr.cookie, "Invalid access token.");
 					continue;
@@ -779,7 +777,7 @@ int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_
 				goto terminate;
 				break;
 			case REPO_CMD_CREATE_LOCK:
-				if(handle_cmd_create_lock(mgr, hdr.access_token, hdr.cookie, repo) < 0) goto terminate;
+				if(handle_cmd_create_lock(mgr, hdr.access_token, hdr.cookie, config) < 0) goto terminate;
 			default:
 				break;
 		}
