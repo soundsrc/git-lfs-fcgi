@@ -831,6 +831,123 @@ error0:
 	return ret;
 }
 
+static int handle_delete_lock(struct repo_manager *mgr, const char *access_token, uint32_t cookie, const struct git_lfs_config *config)
+{
+	int ret = -1;
+	struct repo_cmd_delete_lock_request request;
+	
+	if(socket_read_fully(mgr->socket, &request, sizeof(request)) != sizeof(request))
+	{
+		return -1;
+	}
+	
+	if(request.username[sizeof(request.username) - 1] != 0)
+	{
+		return -1;
+	}
+	
+	struct git_lfs_repo *repo = find_repo_by_id(config, request.repo_id);
+	if(!repo)
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "No repo found at this URL.");
+		return 0;
+	}
+	
+	if(!git_lfs_verify_access_token(access_token, request.repo_id))
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "Invalid access token.");
+		return 0;
+	}
+	
+	sqlite3 *db = open_or_create_locks_db(repo);
+	if(!db)
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "Unable to open locks database.");
+		goto error0;
+	}
+	
+	sqlite3_stmt *stmt;
+	struct repo_cmd_delete_lock_response response;
+	memset(&response, 0, sizeof(response));
+
+	// get info about the lock first
+	if(SQLITE_OK != sqlite3_prepare_v2(db, "SELECT (id, path, locked_at, owner) FROM locks WHERE id=?", -1, &stmt, NULL))
+	{
+		goto error0;
+	}
+	
+	if(SQLITE_OK != sqlite3_bind_int64(stmt, 0, request.id))
+	{
+		goto error1;
+	}
+	
+	if(SQLITE_ROW != sqlite3_step(stmt))
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "Lock does not exist.");
+		goto error1;
+	}
+	
+	response.id = sqlite3_column_int64(stmt, 0);
+	if(strlcpy(response.path, (const char *)sqlite3_column_text(stmt, 1), sizeof(response.path)) >= sizeof(response.path))
+	{
+		goto error1;
+	}
+	response.locked_at = sqlite3_column_int(stmt, 2);
+	if(strlcpy(response.username, (const char *)sqlite3_column_text(stmt, 3), sizeof(response.username)) >= sizeof(response.username))
+	{
+		goto error1;
+	}
+
+	sqlite3_finalize(stmt);
+
+	// prepare to delete the lock
+	
+	if(request.force)
+	{
+		if(SQLITE_OK != sqlite3_prepare_v2(db, "DELETE locks WHERE id=?", -1, &stmt, NULL))
+		{
+			goto error0;
+		}
+		
+		if(SQLITE_OK != sqlite3_bind_int64(stmt, 0, request.id))
+		{
+			goto error1;
+		}
+	}
+	else
+	{
+		if(SQLITE_OK != sqlite3_prepare_v2(db, "DELETE locks WHERE id=? AND owner=?", -1, &stmt, NULL))
+		{
+			goto error0;
+		}
+
+		if(SQLITE_OK != sqlite3_bind_int64(stmt, 0, request.id))
+		{
+			goto error1;
+		}
+		
+		if(SQLITE_OK != sqlite3_bind_text(stmt, 1, request.username, -1, NULL))
+		{
+			goto error1;
+		}
+	}
+
+	response.successful = SQLITE_ROW == sqlite3_step(stmt) ? 1 : 0;
+	
+	if(git_lfs_repo_send_response(mgr, REPO_CMD_LIST_LOCKS, cookie, &response, sizeof(response), NULL) < 0)
+	{
+		goto error1;
+	}
+
+	ret = 0;
+error1:
+	sqlite3_finalize(stmt);
+error0:
+	sqlite3_close(db);
+	
+	return ret;
+}
+
 int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_config *config)
 {
 	LIST_INIT(&upload_list);
@@ -933,10 +1050,15 @@ int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_
 				break;
 			case REPO_CMD_CREATE_LOCK:
 				if(handle_cmd_create_lock(mgr, hdr.access_token, hdr.cookie, config) < 0) goto terminate;
+				break;
 			case REPO_CMD_LIST_LOCKS:
 				if(handle_list_locks(mgr, hdr.access_token, hdr.cookie, config) < 0) goto terminate;
-			default:
 				break;
+			case REPO_CMD_DELETE_LOCK:
+				if(handle_delete_lock(mgr, hdr.access_token, hdr.cookie, config) < 0) goto terminate;
+				break;
+			default:
+				goto terminate;
 		}
 	}
 	

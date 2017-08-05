@@ -41,7 +41,7 @@ enum repo_cmd_type
 	REPO_CMD_ERROR,
 	REPO_CMD_CREATE_LOCK,
 	REPO_CMD_LIST_LOCKS,
-	REPO_CMD_RELEASE_LOCK
+	REPO_CMD_DELETE_LOCK
 };
 
 #define REPO_CMD_MAGIC 0xa733f97f
@@ -147,8 +147,10 @@ struct repo_cmd_list_locks_response
 
 struct repo_cmd_delete_lock_request
 {
+	int repo_id;
 	int64_t id;
-	int force;
+	char username[33];
+	uint8_t force;
 };
 
 struct repo_cmd_delete_lock_response
