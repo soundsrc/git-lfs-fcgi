@@ -112,8 +112,8 @@ struct repo_cmd_create_lock_response
 {
 	int successful;
 	int64_t id;
-	char username[33];
 	char path[1024];
+	char username[33];
 	time_t locked_at;
 };
 
@@ -131,8 +131,8 @@ struct repo_cmd_list_locks_request
 struct repo_cmd_list_lock_info
 {
 	int64_t id;
-	char username[33];
 	char path[1024];
+	char username[33];
 	time_t locked_at;
 };
 
@@ -142,6 +142,8 @@ struct repo_cmd_list_locks_response
 	int next_cursor;
 	struct repo_cmd_list_lock_info locks[];
 };
+
+// Delete locks
 
 struct repo_cmd_delete_lock_request
 {
@@ -153,8 +155,8 @@ struct repo_cmd_delete_lock_response
 {
 	int successful;
 	int64_t id;
-	char username[33];
 	char path[1024];
+	char username[33];
 	time_t locked_at;
 };
 
