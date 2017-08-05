@@ -119,6 +119,11 @@ struct repo_cmd_create_lock_response
 
 // List locks
 
+enum list_lock_config
+{
+	LIST_LOCKS_LIMIT = 100
+};
+
 struct repo_cmd_list_locks_request
 {
 	int repo_id;

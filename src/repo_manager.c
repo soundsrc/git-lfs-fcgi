@@ -695,9 +695,9 @@ static int handle_list_locks(struct repo_manager *mgr, const char *access_token,
 	}
 	
 	// internal limit
-	if(request.limit > 100)
+	if(request.limit > LIST_LOCKS_LIMIT)
 	{
-		request.limit = 100;
+		request.limit = LIST_LOCKS_LIMIT;
 	}
 	
 	struct git_lfs_repo *repo = find_repo_by_id(config, request.repo_id);
@@ -784,12 +784,12 @@ static int handle_list_locks(struct repo_manager *mgr, const char *access_token,
 		}
 	}
 	
-	struct repo_cmd_list_locks_response *response = calloc(1, sizeof *response + 100 * sizeof(response->locks[0]));
+	struct repo_cmd_list_locks_response *response = calloc(1, sizeof *response + LIST_LOCKS_LIMIT * sizeof(response->locks[0]));
 
 	int row_count = 0;
 	while(SQLITE_ROW == sqlite3_step(stmt))
 	{
-		if(row_count >= 100)
+		if(row_count >= LIST_LOCKS_LIMIT)
 		{
 			goto error2; // should not happen, in theory
 		}
