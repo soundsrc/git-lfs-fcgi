@@ -545,7 +545,7 @@ static sqlite3 *open_or_create_locks_db(struct git_lfs_repo *repo)
 		sqlite3_exec(db, "CREATE TABLE locks (id INTEGER PRIMARY KEY, path VARCHAR(1024) UNIQUE, locked_at INTEGER, owner VARCHAR(64));", NULL, NULL, &err_msg);
 	}
 
-	return 0;
+	return db;
 error:
 	sqlite3_close(db);
 	return -1;
@@ -676,6 +676,163 @@ internal_server_error:
 	return 0;
 }
 
+static int handle_list_locks(struct repo_manager *mgr, const char *access_token, uint32_t cookie, const struct git_lfs_config *config)
+{
+	int ret = -1;
+	struct repo_cmd_list_locks_request request;
+
+	if(socket_read_fully(mgr->socket, &request, sizeof(request)) != sizeof(request))
+	{
+		return -1;
+	}
+	
+	if(request.path[sizeof(request.path) - 1] != 0)
+	{
+		return -1;
+	}
+	
+	if(request.limit < 0 || request.cursor < 0)
+	{
+		return -1;
+	}
+	
+	// internal limit
+	if(request.limit > 100)
+	{
+		request.limit = 100;
+	}
+	
+	struct git_lfs_repo *repo = find_repo_by_id(config, request.repo_id);
+	if(!repo)
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "No repo found at this URL.");
+		return 0;
+	}
+	
+	if(!git_lfs_verify_access_token(access_token, request.repo_id))
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "Invalid access token.");
+		return 0;
+	}
+	
+	sqlite3 *db = open_or_create_locks_db(repo);
+	if(!db)
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "Unable to open locks database.");
+		goto error0;
+	}
+
+	char filter_query[512];
+	char query[1024];
+	
+	filter_query[0] = 0;
+	if(request.path[0] || request.id >= 0)
+	{
+		if(strlcpy(filter_query, "WHERE ", sizeof(filter_query)) >= sizeof(filter_query))
+		{
+			goto error0;
+		}
+	}
+	
+	if(request.path[0])
+	{
+		if(strlcpy(filter_query, "path=?", sizeof(filter_query)) >= sizeof(filter_query))
+		{
+			goto error0;
+		}
+	}
+	
+	if(request.id >= 0)
+	{
+		if(request.path[0])
+		{
+			if(strlcpy(filter_query, " AND ", sizeof(filter_query)) >= sizeof(filter_query))
+			{
+				goto error0;
+			}
+		}
+		if(strlcpy(filter_query, "id=?", sizeof(filter_query)) >= sizeof(filter_query))
+		{
+			goto error0;
+		}
+	}
+	
+	if(snprintf(query, sizeof(query), "SELECT (id, path, locked_at, owner) FROM locks %s LIMIT %d,%d",
+			 filter_query, request.cursor, request.limit) >= sizeof(query))
+	{
+		goto error0;
+	}
+	
+	sqlite3_stmt *stmt;
+	if(SQLITE_OK != sqlite3_prepare_v2(db, query, -1, &stmt, NULL))
+	{
+		goto error0;
+	}
+	
+	int bind_index = 0;
+	if(request.path[0])
+	{
+		if(SQLITE_OK != sqlite3_bind_text(stmt, bind_index++, request.path, -1, NULL))
+		{
+			goto error1;
+		}
+	}
+	
+	if(request.id)
+	{
+		if(SQLITE_OK != sqlite3_bind_int64(stmt, bind_index++, request.id))
+		{
+			goto error1;
+		}
+	}
+	
+	struct repo_cmd_list_locks_response *response = calloc(1, sizeof *response + 100 * sizeof(response->locks[0]));
+
+	int row_count = 0;
+	while(SQLITE_ROW == sqlite3_step(stmt))
+	{
+		if(row_count >= 100)
+		{
+			goto error2; // should not happen, in theory
+		}
+
+		struct repo_cmd_list_lock_info *lock = &response->locks[row_count];
+		lock->id = sqlite3_column_int64(stmt, 0);
+		if(strlcpy(lock->path, (const char *)sqlite3_column_text(stmt, 1), sizeof(lock->path)) >= sizeof(lock->path))
+		{
+			goto error2;
+		}
+		lock->locked_at = sqlite3_column_int(stmt, 2);
+		if(strlcpy(lock->username, (const char *)sqlite3_column_text(stmt, 3), sizeof(lock->username)) >= sizeof(lock->username))
+		{
+			goto error2;
+		}
+		row_count++;
+	}
+	
+	response->num_locks = row_count;
+	response->next_cursor = -1;
+	if(row_count >= request.limit)
+	{
+		response->next_cursor = request.cursor + row_count;
+	}
+
+	if(git_lfs_repo_send_response(mgr, REPO_CMD_LIST_LOCKS, cookie, response, sizeof(*response) + row_count * sizeof(response->locks[0]), NULL) < 0)
+	{
+		goto error2;
+	}
+
+	ret = 0;
+error2:
+	free(response);
+error1:
+	sqlite3_finalize(stmt);
+error0:
+	sqlite3_close(db);
+
+	return ret;
+}
+
 int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_config *config)
 {
 	LIST_INIT(&upload_list);
@@ -778,6 +935,8 @@ int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_
 				break;
 			case REPO_CMD_CREATE_LOCK:
 				if(handle_cmd_create_lock(mgr, hdr.access_token, hdr.cookie, config) < 0) goto terminate;
+			case REPO_CMD_LIST_LOCKS:
+				if(handle_list_locks(mgr, hdr.access_token, hdr.cookie, config) < 0) goto terminate;
 			default:
 				break;
 		}

@@ -100,6 +100,7 @@ struct repo_cmd_error_response
 	char message[128];
 };
 
+// Create Lock
 struct repo_cmd_create_lock_request
 {
 	int repo_id;
@@ -116,12 +117,30 @@ struct repo_cmd_create_lock_response
 	time_t locked_at;
 };
 
+// List locks
+
 struct repo_cmd_list_locks_request
 {
+	int repo_id;
 	char path[1024];
-	uint8_t uuid[16];
+	int64_t id;
 	int cursor;
 	int limit;
+};
+
+struct repo_cmd_list_lock_info
+{
+	int64_t id;
+	char username[33];
+	char path[1024];
+	time_t locked_at;
+};
+
+struct repo_cmd_list_locks_response
+{
+	int num_locks;
+	int next_cursor;
+	struct repo_cmd_list_lock_info locks[];
 };
 
 struct repo_cmd_release_lock_request
