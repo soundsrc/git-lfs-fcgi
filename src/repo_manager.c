@@ -118,6 +118,34 @@ static int git_lfs_verify_access_token(const char *access_token, int repo_id)
 	return 0;
 }
 
+// removes //, converts \ to /, and rejects ./ ../
+static int normalize_path(char *path)
+{
+	const char *start = path;
+	char *dest = path;
+	
+	if(strstr(path, "./")) return -1;
+
+	char c;
+	while((c = *start))
+	{
+		if(c == '/' || c == '\\')
+		{
+			while((c = *(start + 1)) && (c == '/' || c == '\\'))
+			{
+				start++;
+			}
+			
+			if(c == '\\') c = '/';
+		}
+		
+		*dest++ = c;
+		start++;
+	}
+	*dest = 0;
+
+	return dest - path;
+}
 
 static struct git_lfs_repo * find_repo_by_id(const struct git_lfs_config *config, int id)
 {
@@ -586,6 +614,12 @@ static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_t
 	{
 		return -1;
 	}
+	
+	if(normalize_path(request.path) < 0)
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "Paths cannot have ./ or ../.");
+		return 0;
+	}
 
 	sqlite3 *db = open_or_create_locks_db(repo);
 	if(!db)
@@ -698,6 +732,12 @@ static int handle_list_locks(struct repo_manager *mgr, const char *access_token,
 	if(request.limit > LIST_LOCKS_LIMIT)
 	{
 		request.limit = LIST_LOCKS_LIMIT;
+	}
+	
+	if(normalize_path(request.path) < 0)
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "Paths cannot have ./ or ../.");
+		return 0;
 	}
 	
 	struct git_lfs_repo *repo = find_repo_by_id(config, request.repo_id);
