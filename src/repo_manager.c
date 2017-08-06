@@ -966,7 +966,7 @@ static int handle_delete_lock(struct repo_manager *mgr, const char *access_token
 	
 	if(request.force)
 	{
-		if(SQLITE_OK != sqlite3_prepare_v2(db, "DELETE locks WHERE id=?", -1, &stmt, NULL))
+		if(SQLITE_OK != sqlite3_prepare_v2(db, "DELETE FROM locks WHERE id=?", -1, &stmt, NULL))
 		{
 			goto error0;
 		}
@@ -978,7 +978,7 @@ static int handle_delete_lock(struct repo_manager *mgr, const char *access_token
 	}
 	else
 	{
-		if(SQLITE_OK != sqlite3_prepare_v2(db, "DELETE locks WHERE id=? AND owner=?", -1, &stmt, NULL))
+		if(SQLITE_OK != sqlite3_prepare_v2(db, "DELETE FROM locks WHERE id=? AND owner=?", -1, &stmt, NULL))
 		{
 			goto error0;
 		}
@@ -994,7 +994,7 @@ static int handle_delete_lock(struct repo_manager *mgr, const char *access_token
 		}
 	}
 
-	response.successful = SQLITE_ROW == sqlite3_step(stmt) ? 1 : 0;
+	response.successful = SQLITE_DONE == sqlite3_step(stmt) ? 1 : 0;
 	
 	if(git_lfs_repo_send_response(mgr, REPO_CMD_DELETE_LOCK, cookie, &response, sizeof(response), NULL) < 0)
 	{
