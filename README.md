@@ -2,8 +2,16 @@
 
 *Warning: Not production ready*
 
-This is a lightweight implementation of a GIT LFS server using the v1 batch API.
-It can be run on it's own or as a FastCGI binary for use with an existing webserver.
+This is an implementation of a standalone GIT LFS server using the v1 batch API.
+
+This server is designed to serve multiple respositories and is a FastCGI binary
+to plug into an existing webserver. Running as a standlone server is supported as well.
+
+# TODO
+
+* SSH authentication tool
+* Support permissions on Git LFS locks
+* Test suite
 
 ## Building from source
 
@@ -15,12 +23,13 @@ make
 ## Running
 
 ```
-git-lfs-server --config=/etc/git-lfs-server.conf
+git-lfs-server --config=/etc/git-lfs-server/git-lfs-server.conf
 ```
 
 ## Configuration file
 
 The configuration file defines global settings for the server and a list of repositories.
+The default configuration file is read from /etc/git-lfs-server/git-lfs-server.conf.
 
 ### Global Settings
 
@@ -95,3 +104,27 @@ For each repository, individual settings may be applied:
 		Path to a passwd file which contains credentials for users to access this repository. The passwd
 		file is created using the htpasswd utility from Apache and supports bcrypt passwords storage only.
 
+## Repository data format
+
+Git LFS repository objects are stored at the path defined by the "root" configuration option in the repository definition.
+Each object is categorized into folders based on the object id (SHA256), with the first 2 characters of the object id
+as the folder name.
+
+Example layout (if "root" is set to /var/lib/git-lfs-server):
+	/var
+		/lib
+			/git-lfs-server
+				/1a
+					/a235b3f3..
+					/b373c7ae..
+				/2b
+					/a669937b..
+				/tmp
+			 	/locks
+			 		/locks.db
+
+A tmp directory exists for temporary files and while files should not linger in here when server is shutdown, 
+they can be cleared when the server is shutdown.
+
+The locks/locks.db file is a database for all Git LFS locks. It can be deleted if it is necessary to force removal
+of all locks or to fix a corrupted database.
