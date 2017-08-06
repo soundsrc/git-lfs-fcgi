@@ -111,6 +111,7 @@ Each object is categorized into folders based on the object id (SHA256), with th
 as the folder name.
 
 Example layout (if "root" is set to /var/lib/git-lfs-server):
+
 	/var
 		/lib
 			/git-lfs-server
