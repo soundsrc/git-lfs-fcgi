@@ -921,9 +921,46 @@ void git_lfs_server_handle_request(struct repo_manager *mgr,
 
 	if(strcmp(method, "GET") == 0)
 	{
-		if(strncmp(end_point, "/download/", 10) == 0) {
+		if(strncmp(end_point, "/download/", 10) == 0)
+		{
 			git_lfs_download(mgr, config, repo, io, end_point + 10);
-		} else {
+		}
+		else if(strcmp(end_point, "/locks") == 0)
+		{
+			const char *path = NULL;
+			int64_t id = -1;
+			int cursor = 0;
+			int limit = LIST_LOCKS_LIMIT;
+			char *end_ptr;
+			const char *str_val;
+			
+			path = get_query_param(params, "path");
+			
+			str_val = get_query_param(params, "id");
+			if(str_val && *str_val)
+			{
+				id = strtoll(str_val, &end_ptr, 10);
+				if(*end_ptr != 0) id = -1;
+			}
+			
+			str_val = get_query_param(params, "cursor");
+			if(str_val && *str_val)
+			{
+				cursor = strtoll(str_val, &end_ptr, 10);
+				if(*end_ptr != 0) cursor = 0;
+			}
+			
+			str_val = get_query_param(params, "limit");
+			if(str_val && *str_val)
+			{
+				limit = strtoll(str_val, &end_ptr, 10);
+				if(*end_ptr != 0) limit = LIST_LOCKS_LIMIT;
+			}
+			
+			git_lfs_server_handle_list_locks(mgr, config, repo, io, path, id >= 0 ? &id : NULL, cursor, limit);
+		}
+		else
+		{
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
 		
@@ -945,6 +982,10 @@ void git_lfs_server_handle_request(struct repo_manager *mgr,
 		else if(strcmp(end_point, "/locks") == 0)
 		{
 			git_lfs_server_handle_create_lock(mgr, config, repo, io);
+		}
+		else if(strcmp(end_point, "/locks/verify") == 0)
+		{
+			git_lfs_server_handle_verify_list_locks(mgr, config, repo, io);
 		}
 		else if(0 == strncmp(end_point, "/locks/", 7)) // starts with /locks
 		{
