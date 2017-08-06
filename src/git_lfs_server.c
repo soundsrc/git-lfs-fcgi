@@ -71,14 +71,22 @@ void git_lfs_write_error(const struct socket_io *io, int error_code, const char 
 		case 500: error_reason = "Internal Server Error"; break;
 		case 501: error_reason = "Not Implemented"; break;
 	}
-	
-	io->write_http_status(io->context, error_code, error_reason);
+
+	const char *body = "{\"message\":\"Unable to write error.\"}";
 	
 	json_object *error = json_object_new_object();
-	json_object_object_add(error, "message", json_object_new_string(message));
-	
+	if(error)
+	{
+		struct json_object *msg_obj = json_object_new_string(message);
+		if(msg_obj)
+		{
+			json_object_object_add(error, "message", msg_obj);
+			body = json_object_get_string(error);
+		}
+	}
+
+	io->write_http_status(io->context, error_code, error_reason);
 	char content_length[64];
-	const char *body = json_object_get_string(error);
 	int length = strlen(body);
 	
 	snprintf(content_length, sizeof(content_length), "Content-Length: %d", length);
@@ -86,10 +94,10 @@ void git_lfs_write_error(const struct socket_io *io, int error_code, const char 
 		"Content-Type: application/vnd.git-lfs+json",
 		content_length
 	};
-	
+
 	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
 	io->write(io->context, body, length);
-	
+
 	json_object_put(error);
 }
 
