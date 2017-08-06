@@ -54,6 +54,7 @@ void git_lfs_write_error(const struct socket_io *io, int error_code, const char 
 	const char *error_reason = "Unknown error";
 	switch(error_code) {
 		case 400: error_reason = "Bad Request"; break;
+		case 403: error_reason = "Forbidden"; break;
 		case 404: error_reason = "Not Found"; break;
 		case 422: error_reason = "Unprocessable Entity"; break;
 		case 500: error_reason = "Internal Server Error"; break;
@@ -439,6 +440,232 @@ static void git_lfs_upload(struct repo_manager *mgr,
 	io->write_headers(io->context, NULL, 0);
 }
 
+struct json_object *git_lfs_lock_info_to_json(struct repo_lock_info *lock_info)
+{
+	struct json_object *lock = json_object_new_object();
+	if(!lock) return NULL;
+
+	// set "id"
+	char id_str[32];
+	if(snprintf(id_str, sizeof(id_str), "%lld", lock_info->id) >= sizeof(id_str))
+	{
+		fprintf(stderr, "Truncation of id string.");
+		goto error;
+	}
+	struct json_object *id_obj = json_object_new_string(id_str);
+	if(!id_obj) goto error;
+	json_object_object_add(lock, "id", id_obj);
+	
+	// set "path"
+	struct json_object *path_obj = json_object_new_string(lock_info->path);
+	if(!path_obj) goto error;
+	json_object_object_add(lock, "path", path_obj);
+	
+	// set "locked_at"
+	char lockedat_str[64];
+	if(!strftime(lockedat_str, sizeof(lockedat_str), "%FT%TZ", gmtime(&lock_info->locked_at)))
+	{
+		fprintf(stderr, "Unable to write timestamp to buffer.");
+		goto error;
+	}
+	struct json_object *lockedat_obj = json_object_new_string(lockedat_str);
+	if(!lockedat_obj) goto error;
+	json_object_object_add(lock, "locked_at", lockedat_obj);
+	
+	// set owner
+	struct json_object *owner = json_object_new_object();
+	if(!owner) goto error;
+	json_object_object_add(lock, "owner", owner);
+	
+	// set name
+	struct json_object *name = json_object_new_string(lock_info->username);
+	if(!name) goto error;
+	json_object_object_add(owner, "name", name);
+	
+	return lock;
+error:
+	json_object_put(lock);
+	return NULL;
+}
+
+static void git_lfs_server_handle_create_lock(struct repo_manager *mgr,
+											  const struct git_lfs_config *config,
+											  const struct git_lfs_repo *repo,
+											  const struct socket_io *io)
+{
+	int have_error = 1;
+	char buffer[4096];
+	int n;
+	json_tokener * tokener = json_tokener_new();
+	struct json_object *root = NULL;
+	char error_msg[128];
+	
+	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0)
+	{
+		root = json_tokener_parse_ex(tokener, buffer, n);
+		enum json_tokener_error err = json_tokener_get_error(tokener);
+		if(err == json_tokener_success) break;
+		if(err != json_tokener_continue) {
+			git_lfs_write_error(io, 400, "JSON parsing error.");
+			goto error0;
+		}
+	}
+	
+	if(config->verbose >= 2)
+	{
+		printf("> %s\n", json_object_get_string(root));
+	}
+	
+	struct json_object *path;
+	if(!json_object_object_get_ex(root, "path", &path) || !json_object_is_type(path, json_type_string))
+	{
+		git_lfs_write_error(io, 400, "API error. Missing path");
+		goto error0;
+	}
+	
+	const char *path_str = json_object_get_string(path);
+	
+	struct repo_cmd_create_lock_response lock_info;
+	if(git_lfs_repo_create_lock(mgr,
+								repo,
+								mgr->username,
+								path_str,
+								&lock_info,
+								error_msg, sizeof(error_msg)) < 0)
+	{
+		git_lfs_write_error(io, 400, "%s", error_msg);
+		goto error0;
+	}
+	
+	struct json_object *response = json_object_new_object();
+	if(!response) goto error0;
+	
+	struct json_object *lock = git_lfs_lock_info_to_json(&lock_info.lock);
+	if(!lock) goto error1;
+	json_object_object_add(response, "lock", lock);
+
+	if(!lock_info.successful)
+	{
+		struct json_object *message = json_object_new_string("Lock exists");
+		if(!message) goto error1;
+		json_object_object_add(response, "message", message);
+	}
+	
+	const char *response_json = json_object_get_string(response);
+	int length = strlen(response_json);
+	char content_length[64];
+	snprintf(content_length, sizeof(content_length), "Content-Length: %d", length);
+	const char *headers[] = {
+		"Content-Type: application/vnd.git-lfs+json",
+		content_length
+	};
+	
+	have_error = 0;
+	if(lock_info.successful)
+	{
+		io->write_http_status(io->context, 201, "Created");
+	}
+	else
+	{
+		io->write_http_status(io->context, 409, "Conflict");
+	}
+	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
+	io->write(io->context, response_json, length);
+		
+error1:
+	json_object_put(response);
+error0:
+	if(root) json_object_put(root);
+	json_tokener_free(tokener);
+	
+	if(have_error)
+	{
+		git_lfs_write_error(io, 500, "Unexpected error");
+	}
+}
+
+static void git_lfs_server_handle_delete_lock(struct repo_manager *mgr,
+											  const struct git_lfs_config *config,
+											  const struct git_lfs_repo *repo,
+											  const struct socket_io *io,
+											  int64_t id)
+{
+	char buffer[4096];
+	int n;
+	json_tokener * tokener = json_tokener_new();
+	struct json_object *root = NULL;
+	char error_msg[128];
+	
+	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0)
+	{
+		root = json_tokener_parse_ex(tokener, buffer, n);
+		enum json_tokener_error err = json_tokener_get_error(tokener);
+		if(err == json_tokener_success) break;
+		if(err != json_tokener_continue) {
+			git_lfs_write_error(io, 400, "JSON parsing error.");
+			goto error0;
+		}
+	}
+	
+	if(config->verbose >= 2)
+	{
+		printf("> %s\n", json_object_get_string(root));
+	}
+	
+	int force = 0;
+	struct json_object *force_obj;
+	if(json_object_object_get_ex(root, "force", &force_obj) && json_object_is_type(force_obj, json_type_boolean))
+	{
+		force = json_object_get_boolean(force_obj);
+	}
+	
+	struct repo_cmd_delete_lock_response delete_obj_response;
+	if(git_lfs_repo_delete_lock(mgr,
+								repo,
+								mgr->username,
+								id,
+								force,
+								&delete_obj_response,
+								error_msg, sizeof(error_msg)) < 0)
+	{
+		git_lfs_write_error(io, 400, "%s", error_msg);
+		goto error0;
+	}
+	
+	struct json_object *response = json_object_new_object();
+	if(!response) goto error0;
+	
+	struct json_object *lock = git_lfs_lock_info_to_json(&delete_obj_response.lock);
+	if(!lock) goto error1;
+	
+	if(!delete_obj_response.successful)
+	{
+		git_lfs_write_error(io, 403, "Unabled to delete lock. Not the owner.");
+		goto error1;
+	}
+	
+	const char *response_json = json_object_get_string(response);
+	int length = strlen(response_json);
+	char content_length[64];
+	snprintf(content_length, sizeof(content_length), "Content-Length: %d", length);
+	const char *headers[] = {
+		"Content-Type: application/vnd.git-lfs+json",
+		content_length
+	};
+	
+	
+	io->write_http_status(io->context, 200, "Ok");
+	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
+	io->write(io->context, response_json, length);
+
+error1:
+	json_object_put(response);
+error0:
+	if(root) json_object_put(root);
+	json_tokener_free(tokener);
+}
+
+
 void git_lfs_server_handle_request(struct repo_manager *mgr,
 								   const struct git_lfs_config *config,
 								   const struct git_lfs_repo *repo,
@@ -510,6 +737,7 @@ void git_lfs_server_handle_request(struct repo_manager *mgr,
 		if(0 == strcmp("Token", auth_type))
 		{
 			strlcpy(mgr->access_token, auth_b64, sizeof(mgr->access_token));
+			memset(mgr->username, 0, sizeof(mgr->username));
 		}
 		else
 		{
@@ -544,6 +772,12 @@ void git_lfs_server_handle_request(struct repo_manager *mgr,
 				git_lfs_write_error(io, 401, "Invalid credentials.");
 				return;
 			}
+			
+			if(strlcpy(mgr->username, username, sizeof(mgr->username)) >= sizeof(mgr->username))
+			{
+				git_lfs_write_error(io, 401, "Username is too long.");
+				return;
+			}
 		}
 	}
 
@@ -569,11 +803,40 @@ void git_lfs_server_handle_request(struct repo_manager *mgr,
 		if(strcmp(end_point, "/objects/batch") == 0)
 		{
 			git_lfs_server_handle_batch(mgr, config, repo, io);
-		} else {
+		}
+		else if(strcmp(end_point, "/locks") == 0)
+		{
+			git_lfs_server_handle_create_lock(mgr, config, repo, io);
+		}
+		else if(0 == strncmp(end_point, "/locks/", 7)) // starts with /locks
+		{
+			char delete_str[64];
+			if(strlcpy(delete_str, end_point + 7, sizeof(delete_str)) >= sizeof(delete_str)) goto error;
+			
+			// attempt to extract /:id/unlock
+			char *iter = delete_str;
+			
+			const char *id_str = strsep(&iter, "/");
+			if(!id_str) goto error;
+			
+			const char *unlock_str = strsep(&iter, "/");
+			if(!unlock_str) goto error;
+
+			if(0 != strcmp(unlock_str, "unlock")) goto error;
+			
+			char *end_ptr;
+			int64_t id = strtoll(id_str, &end_ptr, 10);
+			if(*end_ptr != 0) goto error;
+			
+			git_lfs_server_handle_delete_lock(mgr, config, repo, io, id);
+		}
+		else
+		{
 			git_lfs_write_error(io, 501, "End point not supported.");
 		}
 		
 	} else {
+error:
 		git_lfs_write_error(io, 501, "HTTP method not supported.");
 	}
 }

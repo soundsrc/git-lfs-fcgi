@@ -26,6 +26,8 @@ struct git_lfs_repo;
 struct repo_manager
 {
 	int socket;
+	
+	char username[33];
 	char access_token[16];
 	time_t access_token_expire;
 };
