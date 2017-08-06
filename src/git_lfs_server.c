@@ -29,6 +29,7 @@
 #include "os/mutex.h"
 #include "os/io.h"
 #include "configuration.h"
+#include "httpd.h"
 #include "socket_io.h"
 #include "oid_utils.h"
 #include "repo_manager.h"
@@ -444,7 +445,8 @@ void git_lfs_server_handle_request(struct repo_manager *mgr,
 								   const struct socket_io *io,
 								   const char *authorization_header,
 								   const char *method,
-								   const char *end_point)
+								   const char *end_point,
+								   struct query_param_list *params)
 {
 	if(config->verbose >= 1)
 	{

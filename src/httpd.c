@@ -141,11 +141,26 @@ struct thread_info
 	struct repo_manager *repo_mgr;
 };
 
+const char *get_query_param(struct query_param_list *params, const char *key)
+{
+	struct query_param *param;
+	SLIST_FOREACH(param, params, entry)
+	{
+		if(0 == strcmp(key, param->key))
+		{
+			return param->value;
+		}
+	}
+	
+	return NULL;
+}
+
 static void handle_request(struct thread_info *info,
 						   struct socket_io *io,
 						   const char *authentication,
 						   const char *request_method,
-						   const char *uri)
+						   const char *uri,
+						   const char *query_string)
 {
 	// set some limits on HTTP input
 	if(strnlen(authentication, 256) >= 256)
@@ -163,6 +178,11 @@ static void handle_request(struct thread_info *info,
 		git_lfs_write_error(io, 413, "URI is too long.");
 	}
 	
+	if(strnlen(query_string, 2048) >= 2048)
+	{
+		git_lfs_write_error(io, 413, "Query param is too long.");
+	}
+	
 	
 	const struct git_lfs_repo *repo = NULL, *r;
 	const char *end_point = NULL;
@@ -177,10 +197,94 @@ static void handle_request(struct thread_info *info,
 		}
 	}
 	
-	if(repo) {
-		git_lfs_server_handle_request(info->repo_mgr, info->config, repo, io, authentication, request_method, end_point);
-	} else {
+	struct query_param_list query_params;
+	SLIST_INIT(&query_params);
+	
+	// query params parsing
+	char *query_copy = strndup(query_string, 2048);
+	if(!query_copy)
+	{
+		fprintf(stderr, "Unable to allocate memory for query params.");
+		return;
+	}
+
+	char *iter = query_copy;
+	
+	char *pairs;
+	while((pairs = strsep(&iter, "&")))
+	{
+		char *kviter = pairs;
+		char *key = strsep(&kviter, "=");
+		if(!key) continue;
+		char *value = strsep(&kviter, "\r\n");
+		if(!value) continue; // ignore keys without values, this is applicable to this app as we don't care about those
+		
+		struct query_param *param = calloc(1, sizeof *param);
+		if(!param)
+		{
+			fprintf(stderr, "Unable to allocate memory for query params.");
+			goto error0;
+		}
+		
+		int key_len = strlen(key);
+		int value_len = strlen(value);
+
+		param->key = malloc(key_len + 1);
+		if(!param->key)
+		{
+			fprintf(stderr, "Unable to allocate memory for query params.");
+			goto error1;
+		}
+		
+		if(mg_url_decode(key, key_len, param->key, key_len + 1, 0) < 0)
+		{
+			fprintf(stderr, "URL decode failed.");
+			goto error2;
+		}
+
+		param->value = malloc(value_len + 1);
+		if(!param->value)
+		{
+			fprintf(stderr, "Unable to allocate memory for query params.");
+			goto error2;
+		}
+		
+		if(mg_url_decode(value, value_len, param->value, value_len + 1, 0) < 0)
+		{
+			fprintf(stderr, "URL decode failed.");
+			goto error3;
+		}
+		
+		SLIST_INSERT_HEAD(&query_params, param, entry);
+		
+		continue;
+error3:
+		free(param->value);
+error2:
+		free(param->key);
+error1:
+		free(param);
+		goto error0;
+	}
+	
+	if(repo)
+	{
+		git_lfs_server_handle_request(info->repo_mgr, info->config, repo, io, authentication, request_method, end_point, &query_params);
+	}
+	else
+	{
 		git_lfs_write_error(io, 404, "No repo at this URL.");
+	}
+	
+	free(query_copy);
+error0:
+	while(!SLIST_EMPTY(&query_params))
+	{
+		struct query_param *param = SLIST_FIRST(&query_params);
+		SLIST_REMOVE_HEAD(&query_params, entry);
+		free(param->value);
+		free(param->key);
+		free(param);
 	}
 }
 
@@ -200,7 +304,7 @@ static int httpd_handle_request(struct mg_connection *conn)
 	io.printf = io_mg_printf;
 	io.flush = io_mg_flush;
 	
-	handle_request(info, &io, NULL, req->request_method, req->uri);
+	handle_request(info, &io, NULL, req->request_method, req->uri, req->query_string);
 	
 	return 1;
 }
@@ -234,13 +338,14 @@ static void *fastcgi_handler_thread(void *data)
 		const char *request_method = FCGX_GetParam("REQUEST_METHOD", request.envp);
 		const char *document_uri = FCGX_GetParam("DOCUMENT_URI", request.envp);
 		const char *authentication = FCGX_GetParam("HTTP_AUTHORIZATION", request.envp);
+		const char *query_string = FCGX_GetParam("QUERY_STRING", request.envp);
 
-		if(!request_method || !document_uri) {
+		if(!request_method || !document_uri || !query_string) {
 			git_lfs_write_error(&io, 500, "FCGI error.");
 			continue;
 		}
 
-		handle_request(info, &io, authentication, request_method, document_uri);
+		handle_request(info, &io, authentication, request_method, document_uri, query_string);
 
 		FCGX_Finish_r(&request);
 	}
@@ -312,6 +417,11 @@ int git_lfs_start_httpd(struct repo_manager *mgr, const struct git_lfs_config *c
 		os_signal(SIGTERM, fcgi_term_handler);
 		
 		struct thread_info *thread_infos = (struct thread_info *)calloc(config->num_threads, sizeof(struct thread_info));
+		if(!thread_infos)
+		{
+			fprintf(stderr, "Cannot allocate memory for threads.");
+			return -1;
+		}
 		
 		for(int i = 1; i < config->num_threads; i++) {
 			thread_infos[i].config = config;
