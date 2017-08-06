@@ -648,7 +648,7 @@ static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_t
 		goto error0;
 	}
 
-	if(SQLITE_OK != sqlite3_bind_text(stmt, 0, request.path, -1, NULL)) goto error1;
+	if(SQLITE_OK != sqlite3_bind_text(stmt, 1, request.path, -1, NULL)) goto error1;
 
 	if(SQLITE_ROW == sqlite3_step(stmt))
 	{
@@ -666,7 +666,7 @@ static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_t
 			goto error1;
 		}
 		
-		if(socket_write_fully(mgr->socket, &response, sizeof(response)) != sizeof(response))
+		if(git_lfs_repo_send_response(mgr, REPO_CMD_CREATE_LOCK, cookie, &response, sizeof(response), NULL) < 0)
 		{
 			goto error1;
 		}
@@ -676,23 +676,21 @@ static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_t
 	}
 	sqlite3_finalize(stmt);
 	
-	if(SQLITE_OK != sqlite3_prepare_v2(db, "INSERT INTO locks VALUES(?,?,?,?)", -1, &stmt, NULL))
-	{
-		goto error1;
-	}
-	
-	response.lock.id = sqlite3_last_insert_rowid(db) + 1;
-	if(strlcpy(response.lock.path, (const char *)sqlite3_column_text(stmt, 1), sizeof(response.lock.path)) >= sizeof(response.lock.path))
-	{
-		goto error1;
-	}
-	response.lock.locked_at = time(NULL);
-	if(strlcpy(response.lock.username, (const char *)sqlite3_column_text(stmt, 3), sizeof(response.lock.username)) >= sizeof(response.lock.username))
+	if(SQLITE_OK != sqlite3_prepare_v2(db, "INSERT INTO locks VALUES(NULL,?,?,?)", -1, &stmt, NULL))
 	{
 		goto error1;
 	}
 
-	if(SQLITE_OK != sqlite3_bind_int64(stmt, 0, response.lock.id)) goto error1;
+	if(strlcpy(response.lock.path, request.path, sizeof(response.lock.path)) >= sizeof(response.lock.path))
+	{
+		goto error1;
+	}
+	response.lock.locked_at = time(NULL);
+	if(strlcpy(response.lock.username, request.username, sizeof(response.lock.username)) >= sizeof(response.lock.username))
+	{
+		goto error1;
+	}
+
 	if(SQLITE_OK != sqlite3_bind_text(stmt, 1, request.path, -1, NULL)) goto error1;
 	if(SQLITE_OK != sqlite3_bind_int(stmt, 2, response.lock.locked_at)) goto error1;
 	if(SQLITE_OK != sqlite3_bind_text(stmt, 3, request.username, -1, NULL)) goto error1;
@@ -704,9 +702,11 @@ static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_t
 		goto error1;
 	}
 
+	response.lock.id = sqlite3_last_insert_rowid(db);
+
 	response.successful = 1;
 	
-	if(socket_write_fully(mgr->socket, &response, sizeof(response)) != sizeof(response))
+	if(git_lfs_repo_send_response(mgr, REPO_CMD_CREATE_LOCK,  cookie, &response, sizeof(response), NULL) < 0)
 	{
 		goto error1;
 	}
@@ -819,7 +819,7 @@ static int handle_list_locks(struct repo_manager *mgr, const char *access_token,
 		goto error0;
 	}
 	
-	int bind_index = 0;
+	int bind_index = 1;
 	if(request.path[0])
 	{
 		if(SQLITE_OK != sqlite3_bind_text(stmt, bind_index++, request.path, -1, NULL))
@@ -871,7 +871,13 @@ static int handle_list_locks(struct repo_manager *mgr, const char *access_token,
 		response->next_cursor = request.cursor + row_count;
 	}
 
-	if(git_lfs_repo_send_response(mgr, REPO_CMD_LIST_LOCKS, cookie, response, sizeof(*response) + row_count * sizeof(response->locks[0]), NULL) < 0)
+	if(git_lfs_repo_send_response(mgr, REPO_CMD_LIST_LOCKS, cookie, response, sizeof(*response), NULL) < 0)
+	{
+		goto error2;
+	}
+	
+	int extra_data_size = response->num_locks * sizeof(response->locks[0]);
+	if(socket_write_fully(mgr->socket, response->locks, extra_data_size) != extra_data_size)
 	{
 		goto error2;
 	}
@@ -932,7 +938,7 @@ static int handle_delete_lock(struct repo_manager *mgr, const char *access_token
 		goto error0;
 	}
 	
-	if(SQLITE_OK != sqlite3_bind_int64(stmt, 0, request.id))
+	if(SQLITE_OK != sqlite3_bind_int64(stmt, 1, request.id))
 	{
 		goto error1;
 	}
@@ -965,7 +971,7 @@ static int handle_delete_lock(struct repo_manager *mgr, const char *access_token
 			goto error0;
 		}
 		
-		if(SQLITE_OK != sqlite3_bind_int64(stmt, 0, request.id))
+		if(SQLITE_OK != sqlite3_bind_int64(stmt, 1, request.id))
 		{
 			goto error1;
 		}
@@ -977,12 +983,12 @@ static int handle_delete_lock(struct repo_manager *mgr, const char *access_token
 			goto error0;
 		}
 
-		if(SQLITE_OK != sqlite3_bind_int64(stmt, 0, request.id))
+		if(SQLITE_OK != sqlite3_bind_int64(stmt, 1, request.id))
 		{
 			goto error1;
 		}
 		
-		if(SQLITE_OK != sqlite3_bind_text(stmt, 1, request.username, -1, NULL))
+		if(SQLITE_OK != sqlite3_bind_text(stmt, 2, request.username, -1, NULL))
 		{
 			goto error1;
 		}
@@ -990,7 +996,7 @@ static int handle_delete_lock(struct repo_manager *mgr, const char *access_token
 
 	response.successful = SQLITE_ROW == sqlite3_step(stmt) ? 1 : 0;
 	
-	if(git_lfs_repo_send_response(mgr, REPO_CMD_LIST_LOCKS, cookie, &response, sizeof(response), NULL) < 0)
+	if(git_lfs_repo_send_response(mgr, REPO_CMD_DELETE_LOCK, cookie, &response, sizeof(response), NULL) < 0)
 	{
 		goto error1;
 	}
@@ -1319,7 +1325,7 @@ int git_lfs_repo_create_lock(struct repo_manager *mgr,
 		return -1;
 	}
 	
-	if(strlcpy(request.path, username, sizeof(request.path)) >= sizeof(request.path))
+	if(strlcpy(request.path, path, sizeof(request.path)) >= sizeof(request.path))
 	{
 		return -1;
 	}
@@ -1392,7 +1398,8 @@ int git_lfs_repo_list_locks(struct repo_manager *mgr,
 		goto error;
 	}
 
-	if(socket_read_fully(mgr->socket, &response->locks[0], n * sizeof(response->locks[0])) != n * sizeof(response->locks[0]))
+	int extra_data_size = n * sizeof(response->locks[0]);
+	if(socket_read_fully(mgr->socket, &response->locks[0], extra_data_size) != extra_data_size)
 	{
 		goto error;
 	}
