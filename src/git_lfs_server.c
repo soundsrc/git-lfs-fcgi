@@ -610,6 +610,7 @@ static void git_lfs_server_handle_list_locks(struct repo_manager *mgr,
 	if(git_lfs_repo_list_locks(mgr, repo, cursor, limit, path, id, &lock_list, &num_locks, &next_cursor, error_msg, sizeof(error_msg)) < 0)
 	{
 		git_lfs_write_error(io, 500, "%s", error_msg);
+		return;
 	}
 	
 	struct json_object *response = json_object_new_object();
