@@ -36,6 +36,17 @@
 #include "mkdir_recusive.h"
 #include "git_lfs_server.h"
 
+#define JSON_OBJECT_CHECK(x, label) \
+do {\
+	if(!(x)) \
+	{\
+		fprintf(stderr, "%s:%d: JSON new returned NULL.\n", __FILE__, __LINE__); \
+		git_lfs_write_error(io, 400, "Error when creating JSON response.");\
+		goto label;\
+	}\
+} while(0)
+
+
 typedef enum git_lfs_operation_type
 {
 	git_lfs_operation_unknown,
@@ -91,10 +102,23 @@ static struct json_object *create_json_error(int error_code, const char *format,
 	va_end(va);
 
 	struct json_object *error = json_object_new_object();
-	json_object_object_add(error, "code", json_object_new_int(error_code));
-	json_object_object_add(error, "message", json_object_new_string(message));
+	if(!error) return NULL;
+	
+	struct json_object *error_code_obj = json_object_new_int(error_code);
+	if(!error_code_obj) goto error0;
+	
+	struct json_object *message_obj = json_object_new_string(message);
+	if(!message_obj) goto error1;
+
+	json_object_object_add(error, "code", error_code_obj);
+	json_object_object_add(error, "message", message_obj);
 	
 	return error;
+error1:
+	json_object_put(error_code_obj);
+error0:
+	json_object_put(error);
+	return NULL;
 }
 
 static struct json_object *parse_json_request(const struct socket_io *io)
@@ -147,29 +171,15 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr,
 										const struct git_lfs_repo *repo,
 										struct socket_io *io)
 {
-	char buffer[4096];
-	int n;
-	json_tokener * tokener = json_tokener_new();
-	struct json_object *root = NULL;
-	
-	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0)
+	struct json_object *request = parse_json_request(io);
+	if(!request)
 	{
-		root = json_tokener_parse_ex(tokener, buffer, n);
-		enum json_tokener_error err = json_tokener_get_error(tokener);
-		if(err == json_tokener_success) break;
-		if(err != json_tokener_continue) {
-			git_lfs_write_error(io, 400, "JSON parsing error.");
-			goto error0;
-		}
-	}
-	
-	if(config->verbose >= 2)
-	{
-		printf("> %s\n", json_object_get_string(root));
+		git_lfs_write_error(io, 400, "Error while parsing request.");
+		return;
 	}
 	
 	struct json_object *operation;
-	if(!json_object_object_get_ex(root, "operation", &operation) ||
+	if(!json_object_object_get_ex(request, "operation", &operation) ||
 	   !json_object_is_type(operation, json_type_string))
 	{
 		git_lfs_write_error(io, 400, "API error. Missing operation.");
@@ -177,7 +187,7 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr,
 	}
 	
 	struct json_object *transfers;
-	if(json_object_object_get_ex(root, "transfers", &transfers)) {
+	if(json_object_object_get_ex(request, "transfers", &transfers)) {
 		int has_basic_transfer = 0;
 		
 		// transfers was specified
@@ -209,31 +219,51 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr,
 
 	git_lfs_operation op = git_lfs_operation_unknown;
 	const char *operation_string = json_object_get_string(operation);
-	if(strcmp(operation_string, "upload") == 0) {
+	if(strcmp(operation_string, "upload") == 0)
+	{
 		op = git_lfs_operation_upload;
-	} else if(strcmp(operation_string, "download") == 0) {
+	}
+	else if(strcmp(operation_string, "download") == 0)
+	{
 		op = git_lfs_operation_download;
-	} else {
+	}
+	else
+	{
 		git_lfs_write_error(io, 400, "Unknown operation.");
 		goto error0;
 	}
 	
 	struct json_object *objects;
-	if(!json_object_object_get_ex(root, "objects", &objects)
+	if(!json_object_object_get_ex(request, "objects", &objects)
 	   || !json_object_is_type(objects, json_type_array))
 	{
 		git_lfs_write_error(io, 400, "API error. Missing objects.");
 		goto error0;
 	}
 
-	struct json_object *response_object = json_object_new_object();
+	struct json_object *response = json_object_new_object();
+	if(!response)
+	{
+		git_lfs_write_error(io, 400, "Failed to create response object.");
+		goto error0;
+	}
+	
 	struct json_object *output_objects = json_object_new_array();
+	if(!output_objects)
+	{
+		git_lfs_write_error(io, 400, "Failed to create output object.");
+		goto error1;
+	}
+	
+	json_object_object_add(response, "objects", output_objects);
 	
 	struct array_list *obj_list = json_object_get_array(objects);
 	int obj_count = array_list_length(obj_list);
-	for(int i = 0; i < obj_count; i++) {
+	for(int i = 0; i < obj_count; i++)
+	{
 		struct json_object * obj = array_list_get_idx(obj_list, i);
-		if(!json_object_is_type(obj, json_type_object)) {
+		if(!json_object_is_type(obj, json_type_object))
+		{
 			git_lfs_write_error(io, 400, "API error. Invalid object in stream.");
 			goto error1;
 		}
@@ -249,38 +279,52 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr,
 		}
 		
 		struct json_object *obj_info = json_object_new_object();
+		JSON_OBJECT_CHECK(obj_info, error1);
+
+		json_object_array_add(output_objects, obj_info);
+
 		json_object_object_add(obj_info, "oid", json_object_get(oid));
 		json_object_object_add(obj_info, "size", json_object_get(size));
-		json_object_object_add(obj_info, "authenticated", json_object_new_boolean(1));
 		
+		struct json_object *authenticated_obj = json_object_new_boolean(1);
+		JSON_OBJECT_CHECK(authenticated_obj, error1);
+		json_object_object_add(obj_info, "authenticated", authenticated_obj);
+
 		const char *oid_str = json_object_get_string(oid);
 		if(!oid_str) {
 			struct json_object *error = create_json_error(400, "OID is not a string.");
+			JSON_OBJECT_CHECK(error, error1);
 			json_object_object_add(obj_info, "error", error);
-			json_object_array_add(output_objects, obj_info);
 			continue;
 		}
 
 		uint8_t oid_hash[SHA256_DIGEST_LENGTH];
 		if(oid_from_string(oid_str, oid_hash) < 0) {
 			struct json_object *error = create_json_error(400, "OID (%s) is invalid.", oid_str);
+			JSON_OBJECT_CHECK(error, error1);
 			json_object_object_add(obj_info, "error", error);
-			json_object_array_add(output_objects, obj_info);
 			continue;
 		}
 		
 		char expire_time[32];
-		strftime(expire_time, sizeof(expire_time), "%FT%TZ", gmtime(&mgr->access_token_expire));
+		if(!strftime(expire_time, sizeof(expire_time), "%FT%TZ", gmtime(&mgr->access_token_expire)))
+		{
+			struct json_object *error = create_json_error(400, "Unable to format time string for timestamp %ld.", mgr->access_token_expire);
+			JSON_OBJECT_CHECK(error, error1);
+			json_object_object_add(obj_info, "error", error);
+			continue;
+		}
 
 		char error_msg[128];
 		switch(op) {
 			case git_lfs_operation_upload:
 			{
 				int result = git_lfs_repo_check_oid_exist(mgr, config, repo, oid_hash, error_msg, sizeof(error_msg));
-				if(result < 0) {
+				if(result < 0)
+				{
 					struct json_object *error = create_json_error(400, "%s", error_msg);
+					JSON_OBJECT_CHECK(error, error1);
 					json_object_object_add(obj_info, "error", error);
-					json_object_array_add(output_objects, obj_info);
 					continue;
 				}
 				
@@ -289,29 +333,40 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr,
 					char url[1024];
 
 					// add upload url
-					if(snprintf(url, sizeof(url), "%s/%s/upload/%s", config->base_url, repo->uri, oid_str) >= (long)sizeof(url)) {
+					if(snprintf(url, sizeof(url), "%s/%s/upload/%s", config->base_url, repo->uri, oid_str) >= (long)sizeof(url))
+					{
 						struct json_object *error = create_json_error(400, "Upload URL is too long.");
+						JSON_OBJECT_CHECK(error, error1);
 						json_object_object_add(obj_info, "error", error);
-						json_object_array_add(output_objects, obj_info);
 						continue;
 					}
 
-					struct json_object *upload = json_object_new_object();
-					json_object_object_add(upload, "href", json_object_new_string(url));
-					
-					struct json_object *header = json_object_new_object();
-					
-					char auth_header[64];
-					snprintf(auth_header, sizeof(auth_header), "Token %s", mgr->access_token);
-					json_object_object_add(header, "Authorization", json_object_new_string(auth_header));
-					json_object_object_add(upload, "header", header);
-
-					json_object_object_add(upload, "expires_at", json_object_new_string(expire_time));
-					
 					struct json_object *actions = json_object_new_object();
+					JSON_OBJECT_CHECK(actions, error1);
+					json_object_object_add(obj_info, "actions", actions);
+
+					struct json_object *upload = json_object_new_object();
+					JSON_OBJECT_CHECK(upload, error1);
+
 					json_object_object_add(actions, "upload", upload);
 
-					json_object_object_add(obj_info, "actions", actions);
+					struct json_object *href_obj = json_object_new_string(url);
+					JSON_OBJECT_CHECK(href_obj, error1);
+					json_object_object_add(upload, "href", href_obj);
+					
+					struct json_object *header = json_object_new_object();
+					JSON_OBJECT_CHECK(header, error1);
+					json_object_object_add(upload, "header", header);
+
+					char auth_header[64];
+					snprintf(auth_header, sizeof(auth_header), "Token %s", mgr->access_token);
+					struct json_object *auth_obj = json_object_new_string(auth_header);
+					JSON_OBJECT_CHECK(auth_obj, error1);
+					json_object_object_add(header, "Authorization", auth_obj);
+
+					struct json_object *expire_obj = json_object_new_string(expire_time);
+					JSON_OBJECT_CHECK(expire_obj, error1);
+					json_object_object_add(upload, "expires_at", expire_obj);
 				}
 
 				break;
@@ -320,64 +375,72 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr,
 			case git_lfs_operation_download:
 			{
 				int result = git_lfs_repo_check_oid_exist(mgr, config, repo, oid_hash, error_msg, sizeof(error_msg));
-				if(result < 0) {
+				if(result < 0)
+				{
 					struct json_object *error = create_json_error(400, "%s", error_msg);
+					JSON_OBJECT_CHECK(error, error1);
 					json_object_object_add(obj_info, "error", error);
-					json_object_array_add(output_objects, obj_info);
 					continue;
 				}
 				
-				if(!result) {
+				if(!result)
+				{
 					struct json_object *error = create_json_error(404, "Object (%s) does not exist.", oid_str);
+					JSON_OBJECT_CHECK(error, error1);
 					json_object_object_add(obj_info, "error", error);
-					json_object_array_add(output_objects, obj_info);
 					continue;
 				}
 				
 				char download_url[1024];
 				
-				if(snprintf(download_url, sizeof(download_url), "%s/%s/download/%s", config->base_url, repo->uri, oid_str) >= (long)sizeof(download_url)) {
+				if(snprintf(download_url, sizeof(download_url), "%s/%s/download/%s", config->base_url, repo->uri, oid_str) >= (long)sizeof(download_url))
+				{
 					struct json_object *error = create_json_error(400, "Download URL is too long.");
+					JSON_OBJECT_CHECK(error, error1);
 					json_object_object_add(obj_info, "error", error);
-					json_object_array_add(output_objects, obj_info);
 					continue;
 				}
 				
-				struct json_object *download = json_object_new_object();
-				json_object_object_add(download, "href", json_object_new_string(download_url));
-				
-				struct json_object *header = json_object_new_object();
-				char auth_header[64];
-				snprintf(auth_header, sizeof(auth_header), "Token %s", mgr->access_token);
-				json_object_object_add(header, "Authorization", json_object_new_string(auth_header));
-				json_object_object_add(download, "header", header);
-				
-				json_object_object_add(download, "expires_at", json_object_new_string(expire_time));
-
 				struct json_object *actions = json_object_new_object();
-				json_object_object_add(actions, "download", download);
+				JSON_OBJECT_CHECK(actions, error1);
 				json_object_object_add(obj_info, "actions", actions);
 
+				struct json_object *download = json_object_new_object();
+				JSON_OBJECT_CHECK(download, error1);
+				json_object_object_add(actions, "download", download);
+				
+				struct json_object *download_obj = json_object_new_string(download_url);
+				JSON_OBJECT_CHECK(download_obj, error1);
+				json_object_object_add(download, "href", download_obj);
+				
+				struct json_object *header = json_object_new_object();
+				JSON_OBJECT_CHECK(header, error1);
+				json_object_object_add(download, "header", header);
+
+				char auth_header[64];
+				snprintf(auth_header, sizeof(auth_header), "Token %s", mgr->access_token);
+				struct json_object *auth_obj = json_object_new_string(auth_header);
+				JSON_OBJECT_CHECK(auth_obj, error1);
+				json_object_object_add(header, "Authorization", auth_obj);
+				
+
+				struct json_object *expire_obj = json_object_new_string(expire_time);
+				JSON_OBJECT_CHECK(expire_obj, error1);
+				json_object_object_add(download, "expires_at", expire_obj);
 				break;
 			}
 			
 			default:
 				break;
 		}
-
-		json_object_array_add(output_objects, obj_info);
 	}
 
-	json_object_object_add(response_object, "objects", json_object_get(output_objects));
-
-	write_response_json(config, io, 200, "Ok", response_object);
+	write_response_json(config, io, 200, "Ok", response);
 
 error1:
-	json_object_put(output_objects);
-	json_object_put(response_object);
+	json_object_put(response);
 error0:
-	if(root) json_object_put(root);
-	json_tokener_free(tokener);
+	json_object_put(request);
 }
 
 static void git_lfs_download(struct repo_manager *mgr,
@@ -522,7 +585,6 @@ static void git_lfs_server_handle_create_lock(struct repo_manager *mgr,
 											  const struct git_lfs_repo *repo,
 											  struct socket_io *io)
 {
-	int have_error = 1;
 	char error_msg[128];
 
 	struct json_object *request = parse_json_request(io);
@@ -559,20 +621,20 @@ static void git_lfs_server_handle_create_lock(struct repo_manager *mgr,
 	}
 	
 	struct json_object *response = json_object_new_object();
-	if(!response) goto error0;
+	JSON_OBJECT_CHECK(response, error0);
 	
 	struct json_object *lock = git_lfs_lock_info_to_json(&lock_info.lock);
-	if(!lock) goto error1;
+	JSON_OBJECT_CHECK(lock, error1);
+
 	json_object_object_add(response, "lock", lock);
 
 	if(!lock_info.successful)
 	{
 		struct json_object *message = json_object_new_string("Lock exists");
-		if(!message) goto error1;
+		JSON_OBJECT_CHECK(message, error1);
 		json_object_object_add(response, "message", message);
 	}
-	
-	have_error = 0;
+
 	if(lock_info.successful)
 	{
 		write_response_json(config, io, 201, "Created", response);
@@ -586,11 +648,6 @@ error1:
 	json_object_put(response);
 error0:
 	json_object_put(request);
-	
-	if(have_error)
-	{
-		git_lfs_write_error(io, 500, "Unexpected error");
-	}
 }
 
 static void git_lfs_server_handle_list_locks(struct repo_manager *mgr,
@@ -606,7 +663,7 @@ static void git_lfs_server_handle_list_locks(struct repo_manager *mgr,
 	int next_cursor;
 	char error_msg[128];
 	int num_locks;
-	int have_error = 1;
+
 	if(git_lfs_repo_list_locks(mgr, repo, cursor, limit, path, id, &lock_list, &num_locks, &next_cursor, error_msg, sizeof(error_msg)) < 0)
 	{
 		git_lfs_write_error(io, 500, "%s", error_msg);
@@ -614,16 +671,16 @@ static void git_lfs_server_handle_list_locks(struct repo_manager *mgr,
 	}
 	
 	struct json_object *response = json_object_new_object();
-	if(!response) goto error0;
+	JSON_OBJECT_CHECK(response, error0);
 	
 	struct json_object *locks = json_object_new_array();
-	if(!locks) goto error1;
+	JSON_OBJECT_CHECK(locks, error1);
 	json_object_object_add(response, "locks", locks);
 
 	for(int i = 0; i < num_locks; i++)
 	{
 		struct json_object *lock_json = git_lfs_lock_info_to_json(&lock_list[i]);
-		if(!lock_json) goto error1;
+		JSON_OBJECT_CHECK(lock_json, error1);
 		json_object_array_add(locks, lock_json);
 	}
 	
@@ -632,23 +689,16 @@ static void git_lfs_server_handle_list_locks(struct repo_manager *mgr,
 		char next_cursor_str[32];
 		if(snprintf(next_cursor_str, sizeof(next_cursor_str), "%d", next_cursor) >= sizeof(next_cursor_str)) goto error1;
 		struct json_object *next_cursor_obj = json_object_new_string(next_cursor_str);
-		if(!next_cursor_str) goto error1;
+		JSON_OBJECT_CHECK(next_cursor_str, error1);
 		json_object_object_add(response, "next_cursor", next_cursor_obj);
 	}
-	
-	have_error = 0;
-	
+
 	write_response_json(config, io, 200, "Ok", response);
 
 error1:
 	json_object_put(response);
 error0:
 	free(lock_list);
-	
-	if(have_error)
-	{
-		git_lfs_write_error(io, 500, "Server error");
-	}
 }
 
 static void git_lfs_server_handle_verify_list_locks(struct repo_manager *mgr,
@@ -660,7 +710,6 @@ static void git_lfs_server_handle_verify_list_locks(struct repo_manager *mgr,
 	int next_cursor;
 	char error_msg[128];
 	int num_locks;
-	int have_error = 1;
 	
 	struct json_object *request = parse_json_request(io);
 	if(!request)
@@ -696,25 +745,25 @@ static void git_lfs_server_handle_verify_list_locks(struct repo_manager *mgr,
 	if(git_lfs_repo_list_locks(mgr, repo, cursor, limit, NULL, NULL, &lock_list, &num_locks, &next_cursor, error_msg, sizeof(error_msg)) < 0)
 	{
 		git_lfs_write_error(io, 500, "%s", error_msg);
-		have_error = 0;
 		goto error0;
 	}
 	
 	struct json_object *response = json_object_new_object();
-	if(!response) goto error0;
+	JSON_OBJECT_CHECK(response, error0);
 
 	struct json_object *ours = json_object_new_array();
-	if(!ours) goto error1;
+	JSON_OBJECT_CHECK(ours, error1);
 	json_object_object_add(response, "ours", ours);
 	
 	struct json_object *theirs = json_object_new_array();
-	if(!theirs) goto error1;
+	JSON_OBJECT_CHECK(theirs, error1);
 	json_object_object_add(response, "theirs", theirs);
 	
 	for(int i = 0; i < num_locks; i++)
 	{
 		struct json_object *lock_json = git_lfs_lock_info_to_json(&lock_list[i]);
-		if(!lock_json) goto error1;
+		JSON_OBJECT_CHECK(lock_json, error1);
+
 		if(0 == strcmp(lock_list[i].username, mgr->username))
 		{
 			json_object_array_add(ours, lock_json);
@@ -730,23 +779,16 @@ static void git_lfs_server_handle_verify_list_locks(struct repo_manager *mgr,
 		char next_cursor_str[32];
 		if(snprintf(next_cursor_str, sizeof(next_cursor_str), "%d", next_cursor) >= sizeof(next_cursor_str)) goto error1;
 		struct json_object *next_cursor_obj = json_object_new_string(next_cursor_str);
-		if(!next_cursor_str) goto error1;
+		JSON_OBJECT_CHECK(next_cursor_str, error1);
 		json_object_object_add(response, "next_cursor", next_cursor_obj);
 	}
-	
-	have_error = 0;
-	
+
 	write_response_json(config, io, 200, "Ok", response);
 	
 error1:
 	json_object_put(response);
 error0:
 	free(lock_list);
-	
-	if(have_error)
-	{
-		git_lfs_write_error(io, 500, "Server error");
-	}
 }
 
 static void git_lfs_server_handle_delete_lock(struct repo_manager *mgr,
@@ -785,14 +827,14 @@ static void git_lfs_server_handle_delete_lock(struct repo_manager *mgr,
 	}
 	
 	struct json_object *response = json_object_new_object();
-	if(!response) goto error0;
+	JSON_OBJECT_CHECK(response, error0);
 	
 	struct json_object *lock = git_lfs_lock_info_to_json(&delete_obj_response.lock);
-	if(!lock) goto error1;
+	JSON_OBJECT_CHECK(lock, error1);
 	
 	if(!delete_obj_response.successful)
 	{
-		git_lfs_write_error(io, 403, "Unabled to delete lock. Not the owner.");
+		git_lfs_write_error(io, 403, "Unable to delete lock. Not the owner.");
 		goto error1;
 	}
 	
@@ -1020,3 +1062,5 @@ error:
 		git_lfs_write_error(io, 501, "HTTP method not supported.");
 	}
 }
+
+#undef JSON_OBJECT_CHECK
