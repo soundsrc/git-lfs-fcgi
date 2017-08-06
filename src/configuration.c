@@ -24,6 +24,8 @@ extern int yyparse (void);
 struct git_lfs_config *git_lfs_load_config(const char *path)
 {
 	struct git_lfs_config *config = (struct git_lfs_config *)calloc(1, sizeof(struct git_lfs_config));
+	if(!config) return NULL;
+
 	config->verify_upload = 1;
 	config->port = 80;
 

@@ -45,6 +45,12 @@ int config_scan_push_file(const char *filename)
 	}
 	
 	struct scan_state *state = calloc(1, sizeof *state);
+	if(!state)
+	{
+		fprintf(stderr, "Out of memory\n");
+		fclose(fp);
+		return 0;
+	}
 	state->filename = strdup(filename);
 	state->line_count = 1;
 	state->file = fp;

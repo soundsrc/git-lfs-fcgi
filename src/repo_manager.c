@@ -75,6 +75,11 @@ static struct git_lfs_access_token *git_lfs_add_access_token(const struct git_lf
 	}
 	
 	access_token = calloc(1, sizeof *access_token);
+	if(!access_token)
+	{
+		return NULL;
+	}
+
 	access_token->expire = expires_at + 60;
 	access_token->repo = repo;
 	
@@ -165,6 +170,8 @@ static struct git_lfs_repo * find_repo_by_id(const struct git_lfs_config *config
 struct repo_manager *repo_manager_create(int socket)
 {
 	struct repo_manager *mgr = calloc(1, sizeof *mgr);
+	if(!mgr) return NULL;
+
 	mgr->socket = socket;
 	return mgr;
 }
@@ -396,6 +403,11 @@ static int handle_cmd_put_oid(struct repo_manager *mgr,
 	}
 	
 	struct upload_entry *upload = calloc(1, sizeof *upload);
+	if(!upload)
+	{
+		return -1;
+	}
+
 	upload->repo = repo;
 	upload->id = next_upload_id++;
 	upload->expire = time(NULL) + 7200;
@@ -825,6 +837,10 @@ static int handle_list_locks(struct repo_manager *mgr, const char *access_token,
 	}
 	
 	struct repo_cmd_list_locks_response *response = calloc(1, sizeof *response + LIST_LOCKS_LIMIT * sizeof(response->locks[0]));
+	if(!response)
+	{
+		goto error1;
+	}
 
 	int row_count = 0;
 	while(SQLITE_ROW == sqlite3_step(stmt))
@@ -1359,6 +1375,11 @@ int git_lfs_repo_list_locks(struct repo_manager *mgr,
 	request.id = id ? *id :-1;
 	
 	struct repo_cmd_list_locks_response *response = malloc(sizeof *response + LIST_LOCKS_LIMIT * sizeof(response->locks[0]));
+	if(!response)
+	{
+		goto error;
+	}
+	
 	if(git_lfs_repo_send_request(mgr, REPO_CMD_LIST_LOCKS, mgr->access_token, &request, sizeof(request), response, sizeof *response, NULL, error_msg, error_msg_buf_len) < 0)
 	{
 		goto error;
@@ -1377,6 +1398,10 @@ int git_lfs_repo_list_locks(struct repo_manager *mgr,
 	
 	*out_next_cursor = response->next_cursor;
 	*out_lock_info = calloc(n, sizeof **out_lock_info);
+	if(!*out_lock_info)
+	{
+		goto error;
+	}
 	
 	for(int i = 0; i < response->num_locks; i++)
 	{

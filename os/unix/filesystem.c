@@ -101,6 +101,8 @@ const char ** os_glob(const char *pattern, int *num_matches)
 	}
 	
 	const char **result = calloc(1, alloc_size);
+	if(!result) return NULL;
+
 	char *filenames_start = (char *)result + pointers_size;
 	
 	for (int i = 0; i < glob_results.gl_pathc; ++i)

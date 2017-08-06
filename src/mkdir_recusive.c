@@ -28,6 +28,11 @@ int mkdir_recursive(const char *path, int mode)
 	
 	size_t path_len = strlen(path);
 	path_copy = malloc(path_len + 1);
+	if(!path_copy)
+	{
+		return -1;
+	}
+
 	if(strlcpy(path_copy, path, path_len + 1) >= path_len + 1) {
 		// this should never happen
 		err = -1;

@@ -29,6 +29,7 @@ struct htpasswd *load_htpasswd_file(const char *filename)
 	if(!fp) return NULL;
 	
 	struct htpasswd *htp = calloc(1, sizeof *htp);
+	if(!htp) return NULL;
 	
 	SLIST_INIT(htp);
 
@@ -85,6 +86,13 @@ struct htpasswd *load_htpasswd_file(const char *filename)
 		}
 
 		struct password_entry *user = calloc(1, sizeof *user);
+		if(!user)
+		{
+			free_htpasswd(htp);
+			fclose(fp);
+			return NULL;
+		}
+
 		if(strlcpy(user->username, username, sizeof(user->username)) >= sizeof(user->username))
 		{
 			fprintf(stderr, "htpasswd: Ignored user '%s', username is too long.\n", username);

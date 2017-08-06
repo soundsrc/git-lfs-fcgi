@@ -65,18 +65,43 @@ declarations
 global_declaration
 	: BASE_URL STRING {
 		parse_config->base_url = strndup($2, sizeof($2));
+		if(!parse_config->base_url)
+		{
+			yyerror("Parser ran out of memory");
+			YYERROR;
+		}
 	}
 	| CHROOT_PATH STRING {
-		parse_config->chroot_path = strndup($2, sizeof($2));	
+		parse_config->chroot_path = strndup($2, sizeof($2));
+		if(!parse_config->chroot_path)
+		{
+			yyerror("Parser ran out of memory");
+			YYERROR;
+		}
 	}
 	| PROCESS_CHROOT STRING {
 		parse_config->process_chroot = strndup($2, sizeof($2));
+		if(!parse_config->process_chroot)
+		{
+			yyerror("Parser ran out of memory");
+			YYERROR;
+		}
 	}
 	| USER STRING {
 		parse_config->user = strndup($2, sizeof($2));
+		if(!parse_config->user)
+		{
+			yyerror("Parser ran out of memory");
+			YYERROR;
+		}
 	}
 	| GROUP STRING {
-		parse_config->group = strndup($2, sizeof($2));	
+		parse_config->group = strndup($2, sizeof($2));
+		if(!parse_config->group)
+		{
+			yyerror("Parser ran out of memory");
+			YYERROR;
+		}
 	}
 	| PORT INTEGER {
 		parse_config->port = $2;
@@ -91,7 +116,12 @@ global_declaration
 		parse_config->fastcgi_server = 0;
 	}
 	| FASTCGI_SOCKET STRING {
-		parse_config->fastcgi_socket = strndup($2, sizeof($2));	
+		parse_config->fastcgi_socket = strndup($2, sizeof($2));
+		if(!parse_config->fastcgi_socket)
+		{
+			yyerror("Parser ran out of memory");
+			YYERROR;
+		}
 	}
 	| VERIFY_UPLOAD YES {
 		parse_config->verify_upload = 1;
@@ -105,6 +135,11 @@ global_declaration
 repo_declaration
 	: REPO STRING {
 		parse_repo = (struct git_lfs_repo *)calloc(1, sizeof(struct git_lfs_repo));
+		if(!parse_repo)
+		{
+			yyerror("Unable to allocate memory.");
+			YYERROR;
+		}
 		parse_repo->name = strndup($2, sizeof($2));
 		parse_repo->enable_authentication = 1;
 		parse_repo->id = s_next_id++;
@@ -122,10 +157,20 @@ repo_params_list
 
 repo_param
  	: ROOT STRING {
- 		parse_repo->root_dir = strndup($2, sizeof($2));	
+ 		parse_repo->root_dir = strndup($2, sizeof($2));
+		if(!parse_repo->root_dir)
+		{
+			yyerror("Parser ran out of memory");
+			YYERROR;
+		}
  	}
  	| URI STRING {
- 		parse_repo->uri = strndup($2, sizeof($2));	
+ 		parse_repo->uri = strndup($2, sizeof($2));
+		if(!parse_repo->uri)
+		{
+			yyerror("Parser ran out of memory");
+			YYERROR;
+		}
  	}
 	| ENABLE_AUTHENTICATION YES {
 		parse_repo->enable_authentication = 1;
@@ -135,6 +180,11 @@ repo_param
 	}
 	| AUTH_REALM STRING {
 		parse_repo->auth_realm = strndup($2, sizeof($2));
+		if(!parse_repo->auth_realm)
+		{
+			yyerror("Parser ran out of memory");
+			YYERROR;
+		}
 	}
 	| AUTH_FILE STRING {
 		parse_repo->auth = load_htpasswd_file($2);
