@@ -163,7 +163,7 @@ static void handle_request(struct thread_info *info,
 						   const char *query_string)
 {
 	// set some limits on HTTP input
-	if(strnlen(authentication, 256) >= 256)
+	if(authentication && strnlen(authentication, 256) >= 256)
 	{
 		git_lfs_write_error(io, 413, "Authentication header too long.");
 	}
@@ -304,7 +304,9 @@ static int httpd_handle_request(struct mg_connection *conn)
 	io.printf = io_mg_printf;
 	io.flush = io_mg_flush;
 	
-	handle_request(info, &io, NULL, req->request_method, req->uri, req->query_string);
+	const char *authentication = mg_get_header(conn, "Authorization");
+
+	handle_request(info, &io, authentication, req->request_method, req->uri, req->query_string ? req->query_string : "");
 	
 	return 1;
 }
