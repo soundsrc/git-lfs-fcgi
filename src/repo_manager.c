@@ -1354,6 +1354,7 @@ int git_lfs_repo_list_locks(struct repo_manager *mgr,
 							const char *path,
 							int64_t *id,
 							struct repo_lock_info **out_lock_info,
+							int *out_num_locks,
 							int *out_next_cursor,
 							char *error_msg,
 							size_t error_msg_buf_len)
@@ -1403,6 +1404,7 @@ int git_lfs_repo_list_locks(struct repo_manager *mgr,
 		goto error;
 	}
 	
+	*out_num_locks = response->num_locks;
 	for(int i = 0; i < response->num_locks; i++)
 	{
 		struct repo_lock_info *info = &(*out_lock_info)[i];
