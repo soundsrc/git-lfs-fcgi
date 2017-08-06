@@ -97,10 +97,55 @@ static struct json_object *create_json_error(int error_code, const char *format,
 	return error;
 }
 
+static struct json_object *parse_json_request(const struct socket_io *io)
+{
+	char buffer[4096];
+	int n;
+	json_tokener * tokener = json_tokener_new();
+	struct json_object *request = NULL;
+
+	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0)
+	{
+		request = json_tokener_parse_ex(tokener, buffer, n);
+		enum json_tokener_error err = json_tokener_get_error(tokener);
+		if(err == json_tokener_success) break;
+		if(err != json_tokener_continue)
+		{
+			json_tokener_free(tokener);
+			return NULL;
+		}
+	}
+	
+	json_tokener_free(tokener);
+	return request;
+}
+
+static void write_response_json(const struct git_lfs_config *config, struct socket_io *io, int code, const char *reason, struct json_object *response)
+{
+	const char *response_json = json_object_get_string(response);
+	int length = strlen(response_json);
+	char content_length[64];
+	snprintf(content_length, sizeof(content_length), "Content-Length: %d", length);
+	const char *headers[] =
+	{
+		"Content-Type: application/vnd.git-lfs+json",
+		content_length
+	};
+	
+	io->write_http_status(io->context, code, reason);
+	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
+	io->write(io->context, response_json, length);
+	
+	if(config->verbose >= 2)
+	{
+		printf("< %s\n", response_json);
+	}
+}
+
 static void git_lfs_server_handle_batch(struct repo_manager *mgr,
 										const struct git_lfs_config *config,
 										const struct git_lfs_repo *repo,
-										const struct socket_io *io)
+										struct socket_io *io)
 {
 	char buffer[4096];
 	int n;
@@ -325,24 +370,8 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr,
 
 	json_object_object_add(response_object, "objects", json_object_get(output_objects));
 
-	const char *response_json = json_object_get_string(response_object);
-	int length = strlen(response_json);
-	char content_length[64];
-	snprintf(content_length, sizeof(content_length), "Content-Length: %d", length);
-	const char *headers[] = {
-		"Content-Type: application/vnd.git-lfs+json",
-		content_length
-	};
+	write_response_json(config, io, 200, "Ok", response_object);
 
-	io->write_http_status(io->context, 200, "OK");
-	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
-	io->write(io->context, response_json, strlen(response_json));
-	
-	if(config->verbose >= 2)
-	{
-		printf("< %s\n", response_json);
-	}
-	
 error1:
 	json_object_put(output_objects);
 	json_object_put(response_object);
@@ -491,33 +520,25 @@ error:
 static void git_lfs_server_handle_create_lock(struct repo_manager *mgr,
 											  const struct git_lfs_config *config,
 											  const struct git_lfs_repo *repo,
-											  const struct socket_io *io)
+											  struct socket_io *io)
 {
 	int have_error = 1;
-	char buffer[4096];
-	int n;
-	json_tokener * tokener = json_tokener_new();
-	struct json_object *root = NULL;
 	char error_msg[128];
-	
-	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0)
+
+	struct json_object *request = parse_json_request(io);
+	if(!request)
 	{
-		root = json_tokener_parse_ex(tokener, buffer, n);
-		enum json_tokener_error err = json_tokener_get_error(tokener);
-		if(err == json_tokener_success) break;
-		if(err != json_tokener_continue) {
-			git_lfs_write_error(io, 400, "JSON parsing error.");
-			goto error0;
-		}
+		git_lfs_write_error(io, 400, "Parsing request failed.");
+		goto error0;
 	}
 	
 	if(config->verbose >= 2)
 	{
-		printf("> %s\n", json_object_get_string(root));
+		printf("> %s\n", json_object_get_string(request));
 	}
 	
 	struct json_object *path;
-	if(!json_object_object_get_ex(root, "path", &path) || !json_object_is_type(path, json_type_string))
+	if(!json_object_object_get_ex(request, "path", &path) || !json_object_is_type(path, json_type_string))
 	{
 		git_lfs_write_error(io, 400, "API error. Missing path");
 		goto error0;
@@ -551,32 +572,20 @@ static void git_lfs_server_handle_create_lock(struct repo_manager *mgr,
 		json_object_object_add(response, "message", message);
 	}
 	
-	const char *response_json = json_object_get_string(response);
-	int length = strlen(response_json);
-	char content_length[64];
-	snprintf(content_length, sizeof(content_length), "Content-Length: %d", length);
-	const char *headers[] = {
-		"Content-Type: application/vnd.git-lfs+json",
-		content_length
-	};
-	
 	have_error = 0;
 	if(lock_info.successful)
 	{
-		io->write_http_status(io->context, 201, "Created");
+		write_response_json(config, io, 201, "Created", response);
 	}
 	else
 	{
-		io->write_http_status(io->context, 409, "Conflict");
+		write_response_json(config, io, 409, "Conflict", response);
 	}
-	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
-	io->write(io->context, response_json, length);
 		
 error1:
 	json_object_put(response);
 error0:
-	if(root) json_object_put(root);
-	json_tokener_free(tokener);
+	json_object_put(request);
 	
 	if(have_error)
 	{
@@ -584,37 +593,179 @@ error0:
 	}
 }
 
-static void git_lfs_server_handle_delete_lock(struct repo_manager *mgr,
-											  const struct git_lfs_config *config,
-											  const struct git_lfs_repo *repo,
-											  const struct socket_io *io,
-											  int64_t id)
+static void git_lfs_server_handle_list_locks(struct repo_manager *mgr,
+											 const struct git_lfs_config *config,
+											 const struct git_lfs_repo *repo,
+											 struct socket_io *io,
+											 const char *path,
+											 int64_t *id,
+											 int cursor,
+											 int limit)
 {
-	char buffer[4096];
-	int n;
-	json_tokener * tokener = json_tokener_new();
-	struct json_object *root = NULL;
+	struct repo_lock_info *lock_list;
+	int next_cursor;
 	char error_msg[128];
-	
-	while((n = io->read(io->context, buffer, sizeof(buffer))) > 0)
+	int num_locks;
+	int have_error = 1;
+	if(git_lfs_repo_list_locks(mgr, repo, cursor, limit, path, id, &lock_list, &num_locks, &next_cursor, error_msg, sizeof(error_msg)) < 0)
 	{
-		root = json_tokener_parse_ex(tokener, buffer, n);
-		enum json_tokener_error err = json_tokener_get_error(tokener);
-		if(err == json_tokener_success) break;
-		if(err != json_tokener_continue) {
-			git_lfs_write_error(io, 400, "JSON parsing error.");
-			goto error0;
+		git_lfs_write_error(io, 500, "%s", error_msg);
+	}
+	
+	struct json_object *response = json_object_new_object();
+	if(!response) goto error0;
+	
+	struct json_object *locks = json_object_new_array();
+	if(!locks) goto error1;
+	json_object_object_add(response, "locks", locks);
+
+	for(int i = 0; i < num_locks; i++)
+	{
+		struct json_object *lock_json = git_lfs_lock_info_to_json(&lock_list[i]);
+		if(!lock_json) goto error1;
+		json_object_array_add(locks, lock_json);
+	}
+	
+	if(next_cursor > 0)
+	{
+		char next_cursor_str[32];
+		if(snprintf(next_cursor_str, sizeof(next_cursor_str), "%d", next_cursor) >= sizeof(next_cursor_str)) goto error1;
+		struct json_object *next_cursor_obj = json_object_new_string(next_cursor_str);
+		if(!next_cursor_str) goto error1;
+		json_object_object_add(response, "next_cursor", next_cursor_obj);
+	}
+	
+	have_error = 0;
+	
+	write_response_json(config, io, 200, "Ok", response);
+
+error1:
+	json_object_put(response);
+error0:
+	free(lock_list);
+	
+	if(have_error)
+	{
+		git_lfs_write_error(io, 500, "Server error");
+	}
+}
+
+static void git_lfs_server_handle_verify_list_locks(struct repo_manager *mgr,
+											 const struct git_lfs_config *config,
+											 const struct git_lfs_repo *repo,
+											 struct socket_io *io)
+{
+	struct repo_lock_info *lock_list;
+	int next_cursor;
+	char error_msg[128];
+	int num_locks;
+	int have_error = 1;
+	
+	struct json_object *request = parse_json_request(io);
+	if(!request)
+	{
+		git_lfs_write_error(io, 400, "Error parsing request.");
+		return;
+	}
+
+	int cursor = 0;
+	int limit = LIST_LOCKS_LIMIT;
+	struct json_object *cursor_obj;
+	if(json_object_object_get_ex(request, "cursor", &cursor_obj))
+	{
+		const char *cursor_str = json_object_get_string(cursor_obj);
+		if(cursor_str && *cursor_str)
+		{
+			char *end_ptr;
+			cursor = strtol(cursor_str, &end_ptr, 10);
+			if(*end_ptr != 0)
+			{
+				cursor = 0;
+			}
 		}
 	}
 	
+	struct json_object *limit_obj;
+	if(json_object_object_get_ex(request, "limit", &limit_obj) &&
+	   json_object_get_type(limit_obj) == json_type_int)
+	{
+		limit = json_object_get_int(limit_obj);
+	}
+	
+	if(git_lfs_repo_list_locks(mgr, repo, cursor, limit, NULL, NULL, &lock_list, &num_locks, &next_cursor, error_msg, sizeof(error_msg)) < 0)
+	{
+		git_lfs_write_error(io, 500, "%s", error_msg);
+		have_error = 0;
+		goto error0;
+	}
+	
+	struct json_object *response = json_object_new_object();
+	if(!response) goto error0;
+
+	struct json_object *ours = json_object_new_array();
+	if(!ours) goto error1;
+	json_object_object_add(response, "ours", ours);
+	
+	struct json_object *theirs = json_object_new_array();
+	if(!theirs) goto error1;
+	json_object_object_add(response, "theirs", theirs);
+	
+	for(int i = 0; i < num_locks; i++)
+	{
+		struct json_object *lock_json = git_lfs_lock_info_to_json(&lock_list[i]);
+		if(!lock_json) goto error1;
+		if(0 == strcmp(lock_list[i].username, mgr->username))
+		{
+			json_object_array_add(ours, lock_json);
+		}
+		else
+		{
+			json_object_array_add(theirs, lock_json);
+		}
+	}
+	
+	if(next_cursor > 0)
+	{
+		char next_cursor_str[32];
+		if(snprintf(next_cursor_str, sizeof(next_cursor_str), "%d", next_cursor) >= sizeof(next_cursor_str)) goto error1;
+		struct json_object *next_cursor_obj = json_object_new_string(next_cursor_str);
+		if(!next_cursor_str) goto error1;
+		json_object_object_add(response, "next_cursor", next_cursor_obj);
+	}
+	
+	have_error = 0;
+	
+	write_response_json(config, io, 200, "Ok", response);
+	
+error1:
+	json_object_put(response);
+error0:
+	free(lock_list);
+	
+	if(have_error)
+	{
+		git_lfs_write_error(io, 500, "Server error");
+	}
+}
+
+static void git_lfs_server_handle_delete_lock(struct repo_manager *mgr,
+											  const struct git_lfs_config *config,
+											  const struct git_lfs_repo *repo,
+											  struct socket_io *io,
+											  int64_t id)
+{
+	char error_msg[128];
+	
+	struct json_object *request = parse_json_request(io);
+	
 	if(config->verbose >= 2)
 	{
-		printf("> %s\n", json_object_get_string(root));
+		printf("> %s\n", json_object_get_string(request));
 	}
 	
 	int force = 0;
 	struct json_object *force_obj;
-	if(json_object_object_get_ex(root, "force", &force_obj) && json_object_is_type(force_obj, json_type_boolean))
+	if(json_object_object_get_ex(request, "force", &force_obj) && json_object_is_type(force_obj, json_type_boolean))
 	{
 		force = json_object_get_boolean(force_obj);
 	}
@@ -644,32 +795,19 @@ static void git_lfs_server_handle_delete_lock(struct repo_manager *mgr,
 		goto error1;
 	}
 	
-	const char *response_json = json_object_get_string(response);
-	int length = strlen(response_json);
-	char content_length[64];
-	snprintf(content_length, sizeof(content_length), "Content-Length: %d", length);
-	const char *headers[] = {
-		"Content-Type: application/vnd.git-lfs+json",
-		content_length
-	};
-	
-	
-	io->write_http_status(io->context, 200, "Ok");
-	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
-	io->write(io->context, response_json, length);
+	write_response_json(config, io, 200, "Ok", response);
 
 error1:
 	json_object_put(response);
 error0:
-	if(root) json_object_put(root);
-	json_tokener_free(tokener);
+	json_object_put(request);
 }
 
 
 void git_lfs_server_handle_request(struct repo_manager *mgr,
 								   const struct git_lfs_config *config,
 								   const struct git_lfs_repo *repo,
-								   const struct socket_io *io,
+								   struct socket_io *io,
 								   const char *authorization_header,
 								   const char *method,
 								   const char *end_point,

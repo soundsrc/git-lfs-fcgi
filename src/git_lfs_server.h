@@ -25,7 +25,7 @@ struct query_param_list;
 void git_lfs_server_handle_request(struct repo_manager *mgr,
 								   const struct git_lfs_config *config,
 								   const struct git_lfs_repo *repo,
-								   const struct socket_io *io,
+								   struct socket_io *io,
 								   const char *authorization_header,
 								   const char *method,
 								   const char *end_point,
