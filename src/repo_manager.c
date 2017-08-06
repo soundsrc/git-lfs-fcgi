@@ -704,7 +704,7 @@ static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_t
 
 	response.lock.id = sqlite3_last_insert_rowid(db);
 
-	response.successful = 1;
+	response.successful = sqlite3_changes(db) == 1;
 	
 	if(git_lfs_repo_send_response(mgr, REPO_CMD_CREATE_LOCK,  cookie, &response, sizeof(response), NULL) < 0)
 	{
@@ -994,7 +994,7 @@ static int handle_delete_lock(struct repo_manager *mgr, const char *access_token
 		}
 	}
 
-	response.successful = SQLITE_DONE == sqlite3_step(stmt) ? 1 : 0;
+	response.successful = SQLITE_DONE == sqlite3_step(stmt) && sqlite3_changes(db) == 1? 1 : 0;
 	
 	if(git_lfs_repo_send_response(mgr, REPO_CMD_DELETE_LOCK, cookie, &response, sizeof(response), NULL) < 0)
 	{
