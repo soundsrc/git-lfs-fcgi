@@ -643,7 +643,7 @@ static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_t
 	sqlite3_stmt *stmt;
 	// check if lock exists already
 
-	if(SQLITE_OK != sqlite3_prepare_v2(db, "SELECT (id, path, locked_at, owner) FROM locks WHERE path=?", -1, &stmt, NULL))
+	if(SQLITE_OK != sqlite3_prepare_v2(db, "SELECT id, path, locked_at, owner FROM locks WHERE path=?", -1, &stmt, NULL))
 	{
 		goto error0;
 	}
@@ -807,7 +807,7 @@ static int handle_list_locks(struct repo_manager *mgr, const char *access_token,
 		}
 	}
 	
-	if(snprintf(query, sizeof(query), "SELECT (id, path, locked_at, owner) FROM locks %s LIMIT %d,%d",
+	if(snprintf(query, sizeof(query), "SELECT id, path, locked_at, owner FROM locks %s LIMIT %d,%d",
 			 filter_query, request.cursor, request.limit) >= sizeof(query))
 	{
 		goto error0;
@@ -828,7 +828,7 @@ static int handle_list_locks(struct repo_manager *mgr, const char *access_token,
 		}
 	}
 	
-	if(request.id)
+	if(request.id >= 0)
 	{
 		if(SQLITE_OK != sqlite3_bind_int64(stmt, bind_index++, request.id))
 		{
@@ -927,7 +927,7 @@ static int handle_delete_lock(struct repo_manager *mgr, const char *access_token
 	memset(&response, 0, sizeof(response));
 
 	// get info about the lock first
-	if(SQLITE_OK != sqlite3_prepare_v2(db, "SELECT (id, path, locked_at, owner) FROM locks WHERE id=?", -1, &stmt, NULL))
+	if(SQLITE_OK != sqlite3_prepare_v2(db, "SELECT id, path, locked_at, owner FROM locks WHERE id=?", -1, &stmt, NULL))
 	{
 		goto error0;
 	}
