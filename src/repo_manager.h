@@ -100,6 +100,14 @@ struct repo_cmd_error_response
 	char message[128];
 };
 
+struct repo_lock_info
+{
+	int64_t id;
+	char path[1024];
+	char username[33];
+	time_t locked_at;
+};
+
 // Create Lock
 struct repo_cmd_create_lock_request
 {
@@ -111,10 +119,7 @@ struct repo_cmd_create_lock_request
 struct repo_cmd_create_lock_response
 {
 	int successful;
-	int64_t id;
-	char path[1024];
-	char username[33];
-	time_t locked_at;
+	struct repo_lock_info lock;
 };
 
 // List locks
@@ -133,19 +138,11 @@ struct repo_cmd_list_locks_request
 	int limit;
 };
 
-struct repo_cmd_list_lock_info
-{
-	int64_t id;
-	char path[1024];
-	char username[33];
-	time_t locked_at;
-};
-
 struct repo_cmd_list_locks_response
 {
 	int num_locks;
 	int next_cursor;
-	struct repo_cmd_list_lock_info locks[];
+	struct repo_lock_info locks[];
 };
 
 // Delete locks
@@ -161,10 +158,7 @@ struct repo_cmd_delete_lock_request
 struct repo_cmd_delete_lock_response
 {
 	int successful;
-	int64_t id;
-	char path[1024];
-	char username[33];
-	time_t locked_at;
+	struct repo_lock_info lock;
 };
 
 struct repo_manager *repo_manager_create(int socket);
@@ -228,7 +222,7 @@ int git_lfs_repo_list_locks(struct repo_manager *mgr,
 							int limit,
 							const char *path,
 							int64_t *id,
-							struct repo_cmd_list_lock_info **out_lock_info,
+							struct repo_lock_info **out_lock_info,
 							int *out_next_cursor,
 							char *error_msg,
 							size_t error_msg_buf_len);

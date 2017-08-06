@@ -655,13 +655,13 @@ static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_t
 		// send lock exists response
 		response.successful = 0;
 		
-		response.id = sqlite3_column_int64(stmt, 0);
-		if(strlcpy(response.path, (const char *)sqlite3_column_text(stmt, 1), sizeof(response.path)) >= sizeof(response.path))
+		response.lock.id = sqlite3_column_int64(stmt, 0);
+		if(strlcpy(response.lock.path, (const char *)sqlite3_column_text(stmt, 1), sizeof(response.lock.path)) >= sizeof(response.lock.path))
 		{
 			goto error1;
 		}
-		response.locked_at = sqlite3_column_int(stmt, 2);
-		if(strlcpy(response.username, (const char *)sqlite3_column_text(stmt, 3), sizeof(response.username)) >= sizeof(response.username))
+		response.lock.locked_at = sqlite3_column_int(stmt, 2);
+		if(strlcpy(response.lock.username, (const char *)sqlite3_column_text(stmt, 3), sizeof(response.lock.username)) >= sizeof(response.lock.username))
 		{
 			goto error1;
 		}
@@ -681,20 +681,20 @@ static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_t
 		goto error1;
 	}
 	
-	response.id = sqlite3_last_insert_rowid(db) + 1;
-	if(strlcpy(response.path, (const char *)sqlite3_column_text(stmt, 1), sizeof(response.path)) >= sizeof(response.path))
+	response.lock.id = sqlite3_last_insert_rowid(db) + 1;
+	if(strlcpy(response.lock.path, (const char *)sqlite3_column_text(stmt, 1), sizeof(response.lock.path)) >= sizeof(response.lock.path))
 	{
 		goto error1;
 	}
-	response.locked_at = time(NULL);
-	if(strlcpy(response.username, (const char *)sqlite3_column_text(stmt, 3), sizeof(response.username)) >= sizeof(response.username))
+	response.lock.locked_at = time(NULL);
+	if(strlcpy(response.lock.username, (const char *)sqlite3_column_text(stmt, 3), sizeof(response.lock.username)) >= sizeof(response.lock.username))
 	{
 		goto error1;
 	}
 
-	if(SQLITE_OK != sqlite3_bind_int64(stmt, 0, response.id)) goto error1;
+	if(SQLITE_OK != sqlite3_bind_int64(stmt, 0, response.lock.id)) goto error1;
 	if(SQLITE_OK != sqlite3_bind_text(stmt, 1, request.path, -1, NULL)) goto error1;
-	if(SQLITE_OK != sqlite3_bind_int(stmt, 2, response.locked_at)) goto error1;
+	if(SQLITE_OK != sqlite3_bind_int(stmt, 2, response.lock.locked_at)) goto error1;
 	if(SQLITE_OK != sqlite3_bind_text(stmt, 3, request.username, -1, NULL)) goto error1;
 	
 	if(SQLITE_DONE != sqlite3_step(stmt))
@@ -850,7 +850,7 @@ static int handle_list_locks(struct repo_manager *mgr, const char *access_token,
 			goto error2; // should not happen, in theory
 		}
 
-		struct repo_cmd_list_lock_info *lock = &response->locks[row_count];
+		struct repo_lock_info *lock = &response->locks[row_count];
 		lock->id = sqlite3_column_int64(stmt, 0);
 		if(strlcpy(lock->path, (const char *)sqlite3_column_text(stmt, 1), sizeof(lock->path)) >= sizeof(lock->path))
 		{
@@ -943,13 +943,13 @@ static int handle_delete_lock(struct repo_manager *mgr, const char *access_token
 		goto error1;
 	}
 	
-	response.id = sqlite3_column_int64(stmt, 0);
-	if(strlcpy(response.path, (const char *)sqlite3_column_text(stmt, 1), sizeof(response.path)) >= sizeof(response.path))
+	response.lock.id = sqlite3_column_int64(stmt, 0);
+	if(strlcpy(response.lock.path, (const char *)sqlite3_column_text(stmt, 1), sizeof(response.lock.path)) >= sizeof(response.lock.path))
 	{
 		goto error1;
 	}
-	response.locked_at = sqlite3_column_int(stmt, 2);
-	if(strlcpy(response.username, (const char *)sqlite3_column_text(stmt, 3), sizeof(response.username)) >= sizeof(response.username))
+	response.lock.locked_at = sqlite3_column_int(stmt, 2);
+	if(strlcpy(response.lock.username, (const char *)sqlite3_column_text(stmt, 3), sizeof(response.lock.username)) >= sizeof(response.lock.username))
 	{
 		goto error1;
 	}
@@ -1329,17 +1329,17 @@ int git_lfs_repo_create_lock(struct repo_manager *mgr,
 		return -1;
 	}
 	
-	if(out_response->id < 0)
+	if(out_response->lock.id < 0)
 	{
 		return -1;
 	}
 
-	if(out_response->path[sizeof(out_response->path) - 1] != 0)
+	if(out_response->lock.path[sizeof(out_response->lock.path) - 1] != 0)
 	{
 		return -1;
 	}
 	
-	if(out_response->username[sizeof(out_response->username) - 1] != 0)
+	if(out_response->lock.username[sizeof(out_response->lock.username) - 1] != 0)
 	{
 		return -1;
 	}
@@ -1353,7 +1353,7 @@ int git_lfs_repo_list_locks(struct repo_manager *mgr,
 							int limit,
 							const char *path,
 							int64_t *id,
-							struct repo_cmd_list_lock_info **out_lock_info,
+							struct repo_lock_info **out_lock_info,
 							int *out_next_cursor,
 							char *error_msg,
 							size_t error_msg_buf_len)
@@ -1405,7 +1405,7 @@ int git_lfs_repo_list_locks(struct repo_manager *mgr,
 	
 	for(int i = 0; i < response->num_locks; i++)
 	{
-		struct repo_cmd_list_lock_info *info = &(*out_lock_info)[i];
+		struct repo_lock_info *info = &(*out_lock_info)[i];
 		*info = response->locks[i];
 
 		if(info->path[sizeof(info->path) - 1] != 0)
@@ -1452,12 +1452,12 @@ int git_lfs_repo_delete_lock(struct repo_manager *mgr,
 		return -1;
 	}
 	
-	if(response->path[sizeof(response->path) - 1] != 0)
+	if(response->lock.path[sizeof(response->lock.path) - 1] != 0)
 	{
 		return -1;
 	}
 	
-	if(response->username[sizeof(response->username) - 1] != 0)
+	if(response->lock.username[sizeof(response->lock.username) - 1] != 0)
 	{
 		return -1;
 	}
