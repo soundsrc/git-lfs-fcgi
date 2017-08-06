@@ -131,12 +131,12 @@ static int normalize_path(char *path)
 	
 	if(strstr(path, "./")) return -1;
 
-	char c;
+	char c, d;
 	while((c = *start))
 	{
 		if(c == '/' || c == '\\')
 		{
-			while((c = *(start + 1)) && (c == '/' || c == '\\'))
+			while((d = *(start + 1)) && (d == '/' || d == '\\'))
 			{
 				start++;
 			}
