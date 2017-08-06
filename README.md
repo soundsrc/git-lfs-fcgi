@@ -30,6 +30,7 @@ git-lfs-server --config=/etc/git-lfs-server/git-lfs-server.conf
 
 The configuration file defines global settings for the server and a list of repositories.
 The default configuration file is read from /etc/git-lfs-server/git-lfs-server.conf.
+See conf/git-lfs-server.conf and conf/example-repo.conf for examples.
 
 ### Global Settings
 
@@ -113,16 +114,16 @@ as the folder name.
 Example layout (if "root" is set to /var/lib/git-lfs-server):
 
 	/var
-		/lib
-			/git-lfs-server
-				/1a
-					/a235b3f3..
-					/b373c7ae..
-				/2b
-					/a669937b..
-				/tmp
-			 	/locks
-			 		/locks.db
+	  /lib
+	    /git-lfs-server
+	      /1a
+	        /a235b3f3..
+	        /b373c7ae..
+	      /2b
+	        /a669937b..
+	      /tmp
+	        /locks
+	          /locks.db
 
 A tmp directory exists for temporary files and while files should not linger in here when server is shutdown, 
 they can be cleared when the server is shutdown.
