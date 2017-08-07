@@ -51,12 +51,12 @@ int os_droproot(const char *chroot_path, const char *user, const char *group)
 
 	if(setgid(gid) < 0) {
 		fprintf(stderr, "Failed to drop group privilege.\n");
-		exit(-1);
+		return -1;
 	}
 	
 	if(setuid(uid) < 0) {
 		fprintf(stderr, "Failed to drop user privilege.\n");
-		exit(-1);
+		return -1;
 	}
 	
 	return 0;
