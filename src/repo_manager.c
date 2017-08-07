@@ -583,6 +583,11 @@ static sqlite3 *open_or_create_locks_db(struct git_lfs_repo *repo)
 	{
 		char *err_msg;
 		sqlite3_exec(db, "CREATE TABLE locks (id INTEGER PRIMARY KEY, path VARCHAR(1024) UNIQUE, locked_at INTEGER, owner VARCHAR(64));", NULL, NULL, &err_msg);
+		if(err_msg)
+		{
+			fprintf(stderr, "sql create db error: %s\n", err_msg);
+			sqlite3_free(err_msg);
+		}
 	}
 
 	return db;
