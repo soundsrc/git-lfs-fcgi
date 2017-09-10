@@ -572,7 +572,7 @@ static sqlite3 *open_or_create_locks_db(struct git_lfs_repo *repo)
 		return NULL;
 	}
 	
-	int should_create = os_file_exists(locks_path);
+	int should_create = !os_file_exists(locks_path);
 	sqlite3 *db;
 	if(SQLITE_OK != sqlite3_open(locks_path, &db))
 	{
@@ -582,8 +582,7 @@ static sqlite3 *open_or_create_locks_db(struct git_lfs_repo *repo)
 	if(should_create)
 	{
 		char *err_msg;
-		sqlite3_exec(db, "CREATE TABLE locks (id INTEGER PRIMARY KEY, path VARCHAR(1024) UNIQUE, locked_at INTEGER, owner VARCHAR(64));", NULL, NULL, &err_msg);
-		if(err_msg)
+		if(SQLITE_OK != sqlite3_exec(db, "CREATE TABLE locks (id INTEGER PRIMARY KEY, path VARCHAR(1024) UNIQUE, locked_at INTEGER, owner VARCHAR(64))", NULL, NULL, &err_msg))
 		{
 			fprintf(stderr, "sql create db error: %s\n", err_msg);
 			sqlite3_free(err_msg);
