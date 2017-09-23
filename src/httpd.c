@@ -166,24 +166,27 @@ static void handle_request(struct thread_info *info,
 	if(authentication && strnlen(authentication, 256) >= 256)
 	{
 		git_lfs_write_error(io, 413, "Authentication header too long.");
+		return;
 	}
 	
 	if(strnlen(request_method, 16) >= 16)
 	{
 		git_lfs_write_error(io, 413, "Invalid request method.");
+		return;
 	}
 	
 	if(strnlen(uri, 8192) >= 8192)
 	{
 		git_lfs_write_error(io, 413, "URI is too long.");
+		return;
 	}
 	
 	if(strnlen(query_string, 2048) >= 2048)
 	{
 		git_lfs_write_error(io, 413, "Query param is too long.");
+		return;
 	}
-	
-	
+
 	const struct git_lfs_repo *repo = NULL, *r;
 	const char *end_point = NULL;
 	SLIST_FOREACH(r, &info->config->repos, entries) {

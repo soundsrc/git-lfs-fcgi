@@ -458,7 +458,11 @@ static void git_lfs_download(struct repo_manager *mgr,
 							 const char *oid)
 {
 	uint8_t oid_bytes[SHA256_DIGEST_LENGTH];
-	oid_from_string(oid, oid_bytes);
+	if(oid_from_string(oid, oid_bytes) < 0)
+	{
+		git_lfs_write_error(io, 400, "Invalid object id.");
+		return;
+	}
 
 	int fd;
 	long filesize;
@@ -497,7 +501,11 @@ static void git_lfs_upload(struct repo_manager *mgr,
 						   const char *oid)
 {
 	uint8_t oid_bytes[SHA256_DIGEST_LENGTH];
-	oid_from_string(oid, oid_bytes);
+	if(oid_from_string(oid, oid_bytes) < 0)
+	{
+		git_lfs_write_error(io, 400, "Invalid object id.");
+		return;
+	}
 	
 	uint32_t ticket;
 	int fd;
