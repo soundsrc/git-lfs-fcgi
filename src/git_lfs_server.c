@@ -295,10 +295,6 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr,
 
 		json_object_object_add(obj_info, "oid", json_object_get(oid));
 		json_object_object_add(obj_info, "size", json_object_get(size));
-		
-		struct json_object *authenticated_obj = json_object_new_boolean(1);
-		JSON_OBJECT_CHECK(authenticated_obj, error1);
-		json_object_object_add(obj_info, "authenticated", authenticated_obj);
 
 		const char *oid_str = json_object_get_string(oid);
 		if(!oid_str) {
@@ -363,16 +359,6 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr,
 					struct json_object *href_obj = json_object_new_string(url);
 					JSON_OBJECT_CHECK(href_obj, error1);
 					json_object_object_add(upload, "href", href_obj);
-					
-					struct json_object *header = json_object_new_object();
-					JSON_OBJECT_CHECK(header, error1);
-					json_object_object_add(upload, "header", header);
-
-					char auth_header[64];
-					snprintf(auth_header, sizeof(auth_header), "Token %s", mgr->access_token);
-					struct json_object *auth_obj = json_object_new_string(auth_header);
-					JSON_OBJECT_CHECK(auth_obj, error1);
-					json_object_object_add(header, "Authorization", auth_obj);
 
 					struct json_object *expire_obj = json_object_new_string(expire_time);
 					JSON_OBJECT_CHECK(expire_obj, error1);
@@ -422,17 +408,6 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr,
 				struct json_object *download_obj = json_object_new_string(download_url);
 				JSON_OBJECT_CHECK(download_obj, error1);
 				json_object_object_add(download, "href", download_obj);
-				
-				struct json_object *header = json_object_new_object();
-				JSON_OBJECT_CHECK(header, error1);
-				json_object_object_add(download, "header", header);
-
-				char auth_header[64];
-				snprintf(auth_header, sizeof(auth_header), "Token %s", mgr->access_token);
-				struct json_object *auth_obj = json_object_new_string(auth_header);
-				JSON_OBJECT_CHECK(auth_obj, error1);
-				json_object_object_add(header, "Authorization", auth_obj);
-				
 
 				struct json_object *expire_obj = json_object_new_string(expire_time);
 				JSON_OBJECT_CHECK(expire_obj, error1);
@@ -934,50 +909,42 @@ void git_lfs_server_handle_request(struct repo_manager *mgr,
 			return;
 		}
 		
-		if(0 == strcmp("Token", auth_type))
+		if(0 != strcmp("Basic", auth_type))
 		{
-			strlcpy(mgr->access_token, auth_b64, sizeof(mgr->access_token));
-			memset(mgr->username, 0, sizeof(mgr->username));
+			git_lfs_write_error(io, 500, "Invalid authentication type.");
+			return;
 		}
-		else
+		
+		char decoded_b64[256];
+		int n = b64_pton(auth_b64, (uint8_t *)decoded_b64, sizeof(decoded_b64));
+		if(n < 0 || n >= sizeof(decoded_b64))
 		{
-			if(0 != strcmp("Basic", auth_type))
-			{
-				git_lfs_write_error(io, 500, "Invalid authentication type.");
-				return;
-			}
-			
-			char decoded_b64[256];
-			int n = b64_pton(auth_b64, (uint8_t *)decoded_b64, sizeof(decoded_b64));
-			if(n < 0 || n >= sizeof(decoded_b64))
-			{
-				git_lfs_write_error(io, 500, "Invalid authentication. Authentication header error.");
-				return ;
-			}
-			decoded_b64[n] = 0;
-			
-			char *user_pass = decoded_b64;
-			const char *username = strsep(&user_pass, ":");
-			char *password = strsep(&user_pass, ":");
-			
-			if(!username || !password)
-			{
-				git_lfs_write_error(io, 500, "Invalid authentication. Authentication header error.");
-				return;
-			}
-			
-			int result = git_lfs_repo_authenticate(mgr, config, repo, username, password, mgr->access_token, sizeof(mgr->access_token), &mgr->access_token_expire, NULL, 0);
-			if(result <= 0)
-			{
-				git_lfs_write_error(io, 401, "Invalid credentials.");
-				return;
-			}
-			
-			if(strlcpy(mgr->username, username, sizeof(mgr->username)) >= sizeof(mgr->username))
-			{
-				git_lfs_write_error(io, 401, "Username is too long.");
-				return;
-			}
+			git_lfs_write_error(io, 500, "Invalid authentication. Authentication header error.");
+			return ;
+		}
+		decoded_b64[n] = 0;
+		
+		char *user_pass = decoded_b64;
+		const char *username = strsep(&user_pass, ":");
+		char *password = strsep(&user_pass, ":");
+		
+		if(!username || !password)
+		{
+			git_lfs_write_error(io, 500, "Invalid authentication. Authentication header error.");
+			return;
+		}
+		
+		int result = git_lfs_repo_authenticate(mgr, config, repo, username, password, mgr->access_token, sizeof(mgr->access_token), &mgr->access_token_expire, NULL, 0);
+		if(result <= 0)
+		{
+			git_lfs_write_error(io, 401, "Invalid credentials.");
+			return;
+		}
+		
+		if(strlcpy(mgr->username, username, sizeof(mgr->username)) >= sizeof(mgr->username))
+		{
+			git_lfs_write_error(io, 401, "Username is too long.");
+			return;
 		}
 	} else {
 		char error_msg[256];
