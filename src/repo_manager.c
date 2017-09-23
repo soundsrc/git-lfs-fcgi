@@ -334,6 +334,39 @@ static int handle_cmd_auth(struct repo_manager *mgr, uint32_t cookie, const stru
 	return git_lfs_repo_send_response(mgr, REPO_CMD_AUTH, cookie, &response, sizeof(response), NULL);
 }
 
+static int handle_cmd_get_access_token(struct repo_manager *mgr, uint32_t cookie, const struct git_lfs_config *config)
+{
+	struct repo_cmd_get_access_token_request request;
+	struct repo_cmd_get_access_token_response response;
+	
+	memset(&request, 0, sizeof(request));
+	memset(&response, 0, sizeof(response));
+	
+	if(socket_read_fully(mgr->socket, &request, sizeof(request)) != sizeof(request))
+	{
+		return -1;
+	}
+
+	struct git_lfs_repo *repo = find_repo_by_id(config, request.repo_id);
+	if(!repo) {
+		git_lfs_repo_send_error_response(mgr, cookie, "Invalid repo id.");
+		return 0;
+	}
+	
+	if(repo->enable_authentication)
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "Unable to fetch access token for repo that requires authentication.");
+		return 0;
+	}
+	
+	git_lfs_cleanup_access_tokens();
+	struct git_lfs_access_token *token = git_lfs_add_access_token(repo, time(NULL) + 60);
+	response.expire = token->expire;
+	strlcpy(response.access_token, token->token, sizeof(response.access_token));
+	
+	return git_lfs_repo_send_response(mgr, REPO_CMD_GET_ACCESS_TOKEN, cookie, &response, sizeof(response), NULL);
+}
+
 static int handle_cmd_check_oid(struct repo_manager *mgr, uint32_t cookie, const char *path)
 {
 	struct repo_cmd_check_oid_response resp;
@@ -1063,6 +1096,9 @@ int git_lfs_repo_manager_service(struct repo_manager *mgr, const struct git_lfs_
 			case REPO_CMD_AUTH:
 				if(handle_cmd_auth(mgr, hdr.cookie, config) < 0) goto terminate;
 				break;
+			case REPO_CMD_GET_ACCESS_TOKEN:
+				if(handle_cmd_get_access_token(mgr, hdr.cookie, config) < 0) goto terminate;
+				break;
 			case REPO_CMD_CHECK_OID_EXIST:
 			case REPO_CMD_GET_OID:
 			case REPO_CMD_PUT_OID:
@@ -1193,6 +1229,45 @@ int git_lfs_repo_authenticate(struct repo_manager *mgr,
 	*expire = response.expire;
 
 	return response.success;
+}
+
+int git_lfs_repo_get_access_token(struct repo_manager *mgr,
+								  const struct git_lfs_repo *repo,
+								  char *access_token, size_t access_token_size,
+								  time_t *expire,
+								  char *error_msg,
+								  size_t error_msg_buf_len)
+{
+	struct repo_cmd_get_access_token_request request;
+	struct repo_cmd_get_access_token_response response;
+	
+	if(access_token_size < sizeof(response.access_token))
+	{
+		return -1;
+	}
+	
+	memset(&request, 0, sizeof(request));
+	request.repo_id = repo->id;
+
+	if(git_lfs_repo_send_request(mgr,
+								 REPO_CMD_GET_ACCESS_TOKEN,
+								 "",
+								 &request, sizeof(request),
+								 &response, sizeof(response),
+								 NULL,
+								 error_msg, error_msg_buf_len) < 0) {
+		return -1;
+	}
+	
+	if(response.access_token[sizeof(response.access_token) - 1] != 0)
+	{
+		return -1;
+	}
+	
+	strlcpy(access_token, response.access_token, sizeof(response.access_token));
+	*expire = response.expire;
+	
+	return 0;
 }
 
 int git_lfs_repo_check_oid_exist(struct repo_manager *mgr,

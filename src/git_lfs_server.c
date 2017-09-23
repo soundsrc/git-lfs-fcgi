@@ -979,6 +979,13 @@ void git_lfs_server_handle_request(struct repo_manager *mgr,
 				return;
 			}
 		}
+	} else {
+		char error_msg[256];
+		if(git_lfs_repo_get_access_token(mgr, repo, mgr->access_token, sizeof(mgr->access_token), &mgr->access_token_expire, error_msg, sizeof(error_msg)) < 0)
+		{
+			git_lfs_write_error(io, 401, "%s", error_msg);
+			return;
+		}
 	}
 
 	if(strcmp(method, "GET") == 0)
