@@ -97,6 +97,7 @@ void git_lfs_write_error(const struct socket_io *io, int error_code, const char 
 
 	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
 	io->write(io->context, body, length);
+	io->flush(io->context);
 
 	json_object_put(error);
 }
@@ -167,7 +168,8 @@ static void write_response_json(const struct git_lfs_config *config, struct sock
 	io->write_http_status(io->context, code, reason);
 	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
 	io->write(io->context, response_json, length);
-	
+	io->flush(io->context);
+
 	if(config->verbose >= 2)
 	{
 		printf("< %s\n", response_json);
@@ -490,6 +492,7 @@ static void git_lfs_download(struct repo_manager *mgr,
 		io->write(io->context, buffer, n);
 		filesize -= n;
 	}
+	io->flush(io->context);
 
 	os_close(fd);
 }
