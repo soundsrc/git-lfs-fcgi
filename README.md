@@ -65,7 +65,8 @@ Global settings are defined here:
 
 	fastcgi_socket _path_
 		Path to the unix domain socket to use for FastCGI communication. If specified in the format of ":_port_",
-		then listen on the port specified by _port_. This path is relative to the chroot path.
+		then listen on the port specified by _port_. This path must start with /var/lib/git-lfs-server/run. By
+		default, this is set to /var/lib/git-lfs-server/run/git-lfs-socket.sock
 
 	include _path_
 		Includes the specified path as part of the configuration. Supposes wildcards *.
@@ -92,7 +93,9 @@ For each repository, individual settings may be applied:
 		the URL: "https://www.example.com/var/gitrepos/myrepo.git/info/lfs"
 
 	root _path_
-		The root path to store LFS objects for this repository, relative to the chroot_path.
+		The absolute path to the directory where LFS objects are saved for this repository.
+		If chroot_path is defined in the global configuration, this path must start with the
+		chroot_path.
 
 	enable_authentication [yes|no]
 		Whether built-in authentication is turned on for this repository. One reason to turn this off is

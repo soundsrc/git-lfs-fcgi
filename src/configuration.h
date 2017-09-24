@@ -32,7 +32,8 @@ struct git_lfs_repo
 	uint32_t id; // unique repo id
 	char *name; // name of repo
 	char *uri; // uri
-	char *root_dir; // root directory for files
+	char *full_root_dir; // full path to the root_dir
+	char *root_dir; // root directory for files, relative to chroot_path
 	
 	int enable_authentication;
 	char *auth_realm;

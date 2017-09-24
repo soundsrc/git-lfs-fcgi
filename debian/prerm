@@ -36,7 +36,7 @@ esac
 #DEBHELPER#
 
 systemctl stop git-lfs-server
-rmdir /var/lib/git-lfs-server/empty > /dev/null 2>&1 || true
+rmdir /var/lib/git-lfs-server/run > /dev/null 2>&1 || true
 rmdir /var/lib/git-lfs-server > /dev/null 2>&1 || true
 
 exit 0

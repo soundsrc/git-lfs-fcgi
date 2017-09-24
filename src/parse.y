@@ -157,8 +157,8 @@ repo_params_list
 
 repo_param
  	: ROOT STRING {
- 		parse_repo->root_dir = strndup($2, sizeof($2));
-		if(!parse_repo->root_dir)
+		parse_repo->full_root_dir = strndup($2, sizeof($2));
+		if(!parse_repo->full_root_dir)
 		{
 			yyerror("Parser ran out of memory");
 			YYERROR;

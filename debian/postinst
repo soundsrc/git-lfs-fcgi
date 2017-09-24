@@ -45,6 +45,6 @@ fi
 
 # create folders
 install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-server
-install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-server/empty
+install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-server/run
 
 exit 0

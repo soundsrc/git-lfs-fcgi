@@ -54,7 +54,53 @@ struct git_lfs_config *git_lfs_load_config(const char *path)
 	
 	if(!config->process_chroot)
 	{
-		config->process_chroot = strdup("/var/lib/git-lfs-server/empty");
+		config->process_chroot = strdup("/var/lib/git-lfs-server/run");
+	}
+
+	size_t chroot_path_len = 0;
+	if(config->chroot_path)
+	{
+		chroot_path_len = strlen(config->chroot_path);
+	}
+
+	struct git_lfs_repo *repo;
+	SLIST_FOREACH(repo, &config->repos, entries)
+	{
+		if(chroot_path_len)
+		{
+			if(0 != strncmp(config->chroot_path, repo->full_root_dir, chroot_path_len) ||
+			   repo->full_root_dir[chroot_path_len] != '/')
+			{
+				fprintf(stderr, "Repo '%s' root_dir (%s) is not inside the chroot_dir (%s).\n", repo->name, repo->full_root_dir, config->chroot_path);
+				goto error;
+			}
+			
+			repo->root_dir = strdup(repo->full_root_dir + chroot_path_len);
+		}
+		else
+		{
+			repo->root_dir = strdup(repo->full_root_dir);
+		}
+	}
+	
+	if(!config->fastcgi_socket)
+	{
+		config->fastcgi_socket = strdup("/var/lib/git-lfs-server/run/git-lfs-server.sock");
+	}
+	
+	if(config->fastcgi_socket[0] == '/')
+	{
+		size_t process_chroot_path_len = strlen(config->process_chroot);
+		if(0 != strncmp(config->fastcgi_socket, config->process_chroot, process_chroot_path_len) ||
+		   config->fastcgi_socket[process_chroot_path_len] != '/')
+		{
+			fprintf(stderr, "FastCGI socket path must be contained in %s.\n", config->process_chroot);
+			goto error;
+		}
+		
+		char *chroot_fastcgi_socket = strdup(config->fastcgi_socket + process_chroot_path_len);
+		free(config->fastcgi_socket);
+		config->fastcgi_socket = chroot_fastcgi_socket;
 	}
 
 	return config;
@@ -82,6 +128,7 @@ void git_lfs_free_config(struct git_lfs_config *config)
 		free(repo->name);
 		free(repo->uri);
 		free(repo->root_dir);
+		free(repo->full_root_dir);
 		
 		free(repo);
 	}
