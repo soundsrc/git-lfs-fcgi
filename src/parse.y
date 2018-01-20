@@ -141,7 +141,6 @@ repo_declaration
 			YYERROR;
 		}
 		parse_repo->name = strndup($2, sizeof($2));
-		parse_repo->enable_authentication = 1;
 		parse_repo->id = s_next_id++;
 	}
 	'{' repo_params_list '}' {
