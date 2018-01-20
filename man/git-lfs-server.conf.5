@@ -1,0 +1,134 @@
+.TH man 8 "20 Jan 2018" "1.0" "git-lfs-server.conf man page"
+.SH NAME
+git-lfs-server.conf \- GIT LFS server configuration file
+
+.SH DESCRIPTION
+git-lfs-server.conf is the main configuration file for git-lfs-server.
+It defines the global configuration values of the server as well as the
+configuration to one or more GIT LFS repositories hosted on the same
+server.
+
+.SH FORMAT
+The format of the configuration file is a list of key value pairs.
+In addition, one or more repository blocks should be defined for
+each repository.
+
+The default configuation file is located at
+.IR /etc/git-lfs-server/git-lfs-server.conf
+
+An example configuration may look like this:
+
+.PP
+.nf
+.RS
+base_url "http://example.com"
+chroot_path "/var/lib/git-lfs-server"
+repo "My Git Repo"
+{
+	uri "/myrepo/info/lfs"
+	root "/var/lib/git-lfs-server/myrepo"
+}
+.RE
+.fi
+.PP
+
+Continue reading the following sections for the meanings behind the settings.
+
+.SH GLOBAL SETTINGS
+These are settings that can be set globally in the configuration files.
+
+.IP "base_url URL"
+Mandatory. This should be set to the base URL of your webserver.  i.e. "https://git.mydomain.com"
+This will be the URL used for generating download and upload links for the Git LFS client to upload and download objects.
+
+.IP "chroot_path PATH"
+Optional chroot path. All repository objects will only be written to subdirectories in this folder.
+
+.IP "user USER"
+System username to run the server. Default is: "git-lfs". Once the server startup is complete, it will attempt
+to drop its privilege to this user.
+
+.IP "group GROUP"
+System group to run the server. Default is: "git-lfs".
+
+.IP "verify_upload [yes|no]"
+Whether uploaded files are verified by comparing the SHA256 with the file contents before saving it.
+Default is true.
+
+.IP "num_threads NUM"
+The number of worker threads to use. Increase to allow more concurrent connections.
+
+.IP "fastcgi_server [yes|no]"
+By default, the server is configured to run in FastCGI mode. Optionally set this to no to run with
+the built-in webserver. You must also specify the port number if running as standaline server.
+Running as a standalone server is not recommended.
+
+.IP "port NUMBER"
+The port number to use to listen when not running in FastCGI mode.
+
+.IP "fastcgi_socket PATH"
+Path to the unix domain socket to use for FastCGI communication. 
+This path must start with /var/lib/git-lfs-server/run. By default, this is set to 
+.I /var/lib/git-lfs-server/run/git-lfs-socket.sock
+It is not recommended to change this.
+
+.IP "include PATH"
+Includes the specified path as part of the configuration. Supposes wildcards *.
+
+.SH REPOSITORY SETTINGS
+
+In addition to the global settings, one may define one or more repositories. Each repository
+is defined using the repo block. The repo block looks like:
+
+.PP
+.nf
+.RS
+repo "Name of Repo"
+{
+	uri "/repo/info/lfs"
+	root "/var/lib/git-lfs-server/repo"
+	# other settings ...
+}
+.RE
+.fi
+.PP
+
+For each repository, the following settings may be set.
+
+.IP "uri URI"
+Mandatory. Defines the URI for this repository. This is combined with the base_url to make a fullpath.
+For example, if the repository defines:
+
+	uri "/var/gitrepos/myrepo.git/info/lfs"
+
+and in the global settings base_url is defined as:
+
+	base_url "https://www.example.com"
+
+then it will match the URL: "https://www.example.com/var/gitrepos/myrepo.git/info/lfs"
+
+.IP "root PATH"
+Mandatory. Defines a path in your filesystem to where to store the LFS objects for this repository.
+Initially, this should point to an empty directory on your filesystem. The directory
+should also have write access to the "git-lfs" user, or whichever user was defined in the
+global configuration. IMPORTANT: if the chroot_path was defined in the global configuration,
+then this directory must also start with the chroot_path.
+
+.IP "enable_authentication [yes|no]"
+This option is only necessary to enable built-in authentication when running as a standalone
+server. When running as a FastCGI binary, it's better to let your webserver handle the 
+authentication.
+
+.IP "auth_realm NAME"
+Authentication realm name. Optional.
+
+.IP "auth_file PATH"
+Only used when enable_authentication is set to yes. Path to a passwd file which contains
+credentials for users to access this repository. The passwd	file is created using the htpasswd
+utility from Apache and only supports bcrypt passwords storage only.
+
+.SH SEE ALSO
+git-lfs-server.conf(5)
+
+.SH AUTHOR
+Sound <sound@sagaforce.com>
