@@ -5,7 +5,7 @@
 This is an implementation of a FastCGI GIT LFS server using the v1 batch API.
 
 This server is designed to serve multiple respositories and is a FastCGI binary
-to plug into an existing webserver. Running as a standlone server is supported as well.
+to plug into an existing webserver.
 
 # TODO
 
@@ -65,7 +65,7 @@ Man pages located in man/ fully document the configuration files.
 
 See:
 
-[git-lfs-server (5)](man/git-lfs-server.conf.txt)
+[git-lfs-server.conf (5)](man/git-lfs-server.conf.txt)
 
 [git-lfs-server (8)](man/git-lfs-server.txt)
 
