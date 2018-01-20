@@ -71,19 +71,21 @@ See:
 
 ## FastCGI configuration
 
-The webserver should now be configured to listen on https://git-server.com/foo/bar.git/info/lfs
+Using the example of https://git-server.com/foo/bar.git/info/lfs,
+the webserver should now be configured to listen on the URI /foo/bar.git/info/lfs
 and have the request passed via FastCGI to the socket listening on
 
 /var/lib/git-lfs-server/run/git-lfs-server.sock
 
 The webserver should also ideally be secured with HTTPS and authentication.
+Instructions for setting this up will vary depending on the webserver.
 
 ### NGINX
 
 In your server configuration, you might add a location block that looks like this:
 
 ```
-location /foo/bar.git/info {
+location /foo/bar.git/info/lfs {
 	client_max_body_size 0; # unlimited upload/download size
 	include /etc/nginx/fastcgi_param # might be different base on your disto
 	fastcgi_pass_request_headers on;
