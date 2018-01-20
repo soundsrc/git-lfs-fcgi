@@ -63,10 +63,9 @@ Man pages located in man/ fully document the configuration files.
 
 See:
 
-[man git-lfs-server (8)](man/git-lfs-server.html)
-[man git-lfs-server (5)](man/git-lfs-server.conf.html)
+[git-lfs-server (5)](man/git-lfs-server.conf.txt)
 
-Can be used when manpages are installed into the system.
+[git-lfs-server (8)](man/git-lfs-server.txt)
 
 ## Repository data format
 
