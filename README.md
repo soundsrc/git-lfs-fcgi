@@ -159,7 +159,7 @@ On systemd systems, there is a conf/git-lfs-server.service file which you can co
 Then you can start the server systemd style:
 
 ```
-servicectl git-lfs-server start
+systemctl git-lfs-server start
 ```
 
 ## Repository data format
