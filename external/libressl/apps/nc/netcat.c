@@ -1,4 +1,4 @@
-/* $OpenBSD: netcat.c,v 1.186 2017/06/11 14:38:52 tb Exp $ */
+/* $OpenBSD: netcat.c,v 1.187 2017/07/15 17:27:39 jsing Exp $ */
 /*
  * Copyright (c) 2001 Eric Jackson <ericj@monkey.org>
  * Copyright (c) 2015 Bob Beck.  All rights reserved.
@@ -75,6 +75,7 @@
 #define TLS_NONAME	(1 << 3)
 #define TLS_CCERT	(1 << 4)
 #define TLS_MUSTSTAPLE	(1 << 5)
+#define TLS_COMPAT	(1 << 6)
 
 /* Command Line Options */
 int	dflag;					/* detached, no stdin */
@@ -413,6 +414,8 @@ main(int argc, char *argv[])
 		errx(1, "cannot use -c and -F");
 	if (TLSopt && !usetls)
 		errx(1, "you must specify -c to use TLS options");
+	if ((TLSopt & (TLS_ALL|TLS_COMPAT)) == (TLS_ALL|TLS_COMPAT))
+		errx(1, "cannot use -T tlsall and -T tlscompat");
 	if (Cflag && !usetls)
 		errx(1, "you must specify -c to use -C");
 	if (Kflag && !usetls)
@@ -506,11 +509,12 @@ main(int argc, char *argv[])
 			errx(1, "%s", tls_config_error(tls_cfg));
 		if (oflag && tls_config_set_ocsp_staple_file(tls_cfg, oflag) == -1)
 			errx(1, "%s", tls_config_error(tls_cfg));
-		if (TLSopt & TLS_ALL) {
+		if (TLSopt & (TLS_ALL|TLS_COMPAT)) {
 			if (tls_config_set_protocols(tls_cfg,
 			    TLS_PROTOCOLS_ALL) != 0)
 				errx(1, "%s", tls_config_error(tls_cfg));
-			if (tls_config_set_ciphers(tls_cfg, "all") != 0)
+			if (tls_config_set_ciphers(tls_cfg,
+			    (TLSopt & TLS_ALL) ? "all" : "compat") != 0)
 				errx(1, "%s", tls_config_error(tls_cfg));
 		}
 		if (!lflag && (TLSopt & TLS_CCERT))
@@ -1499,7 +1503,7 @@ set_common_sockopts(int s, int af)
 			err(1, "set IPv6 traffic class");
 #else
 		else if (af == AF_INET6) {
-			errno = ENOPROTOOPT
+			errno = ENOPROTOOPT;
 			err(1, "set IPv6 traffic class not supported");
 		}
 #endif
@@ -1600,6 +1604,7 @@ map_tls(char *s, int *val)
 		{ "noname",		TLS_NONAME },
 		{ "clientcert",		TLS_CCERT},
 		{ "muststaple",		TLS_MUSTSTAPLE},
+		{ "tlscompat",		TLS_COMPAT },
 		{ NULL,			-1 },
 	};
 

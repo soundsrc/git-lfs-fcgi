@@ -1,4 +1,4 @@
-/* $OpenBSD: ssl.h,v 1.129 2017/05/07 04:22:24 beck Exp $ */
+/* $OpenBSD: ssl.h,v 1.134 2017/08/30 16:24:21 jsing Exp $ */
 /* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
  * All rights reserved.
  *
@@ -481,7 +481,6 @@ struct ssl_session_st {
 
 /* Allow initial connection to servers that don't support RI */
 #define SSL_OP_LEGACY_SERVER_CONNECT			0x00000004L
-#define SSL_OP_TLSEXT_PADDING				0x00000010L
 
 /* Disable SSL 3.0/TLS 1.0 CBC vulnerability workaround that was added
  * in OpenSSL 0.9.6d.  Usually (depending on the application protocol)
@@ -503,8 +502,6 @@ struct ssl_session_st {
 #define SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION	0x00010000L
 /* Disallow client initiated renegotiation. */
 #define SSL_OP_NO_CLIENT_RENEGOTIATION			0x00020000L
-/* If set, always create a new key when using tmp_ecdh parameters */
-#define SSL_OP_SINGLE_ECDH_USE				0x00080000L
 /* If set, always create a new key when using tmp_dh parameters */
 #define SSL_OP_SINGLE_DH_USE				0x00100000L
 /* Set on servers to choose the cipher according to the server's
@@ -520,21 +517,14 @@ struct ssl_session_st {
 #define SSL_OP_NO_TLSv1_2				0x08000000L
 #define SSL_OP_NO_TLSv1_1				0x10000000L
 
-/* Make server add server-hello extension from early version of
- * cryptopro draft, when GOST ciphersuite is negotiated.
- * Required for interoperability with CryptoPro CSP 3.x
- */
-#define SSL_OP_CRYPTOPRO_TLSEXT_BUG			0x80000000L
-
 /* SSL_OP_ALL: various bug workarounds that should be rather harmless. */
 #define SSL_OP_ALL \
-    (SSL_OP_LEGACY_SERVER_CONNECT | \
-     SSL_OP_TLSEXT_PADDING | \
-     SSL_OP_CRYPTOPRO_TLSEXT_BUG)
+    (SSL_OP_LEGACY_SERVER_CONNECT)
 
 /* Obsolete flags kept for compatibility. No sane code should use them. */
 #define SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION	0x0
 #define SSL_OP_CISCO_ANYCONNECT				0x0
+#define SSL_OP_CRYPTOPRO_TLSEXT_BUG			0x0
 #define SSL_OP_EPHEMERAL_RSA				0x0
 #define SSL_OP_MICROSOFT_BIG_SSLV3_BUFFER		0x0
 #define SSL_OP_MICROSOFT_SESS_ID_BUG			0x0
@@ -549,8 +539,10 @@ struct ssl_session_st {
 #define SSL_OP_PKCS1_CHECK_1				0x0
 #define SSL_OP_PKCS1_CHECK_2				0x0
 #define SSL_OP_SAFARI_ECDHE_ECDSA_BUG			0x0
+#define SSL_OP_SINGLE_ECDH_USE				0x0
 #define SSL_OP_SSLEAY_080_CLIENT_DH_BUG			0x0
 #define SSL_OP_SSLREF2_REUSE_CERT_TYPE_BUG		0x0
+#define SSL_OP_TLSEXT_PADDING				0x0
 #define SSL_OP_TLS_BLOCK_PADDING_BUG			0x0
 #define SSL_OP_TLS_D5_BUG				0x0
 

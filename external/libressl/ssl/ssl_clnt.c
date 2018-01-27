@@ -1,4 +1,4 @@
-/* $OpenBSD: ssl_clnt.c,v 1.14 2017/05/07 04:22:24 beck Exp $ */
+/* $OpenBSD: ssl_clnt.c,v 1.17 2017/08/12 21:47:59 jsing Exp $ */
 /* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
  * All rights reserved.
  *
@@ -407,14 +407,11 @@ ssl3_connect(SSL *s)
 		case SSL3_ST_CW_CHANGE_A:
 		case SSL3_ST_CW_CHANGE_B:
 			ret = ssl3_send_change_cipher_spec(s,
-			SSL3_ST_CW_CHANGE_A, SSL3_ST_CW_CHANGE_B);
+			    SSL3_ST_CW_CHANGE_A, SSL3_ST_CW_CHANGE_B);
 			if (ret <= 0)
 				goto end;
 
-			if (S3I(s)->next_proto_neg_seen)
-				S3I(s)->hs.state = SSL3_ST_CW_NEXT_PROTO_A;
-			else
-				S3I(s)->hs.state = SSL3_ST_CW_FINISHED_A;
+			S3I(s)->hs.state = SSL3_ST_CW_FINISHED_A;
 			s->internal->init_num = 0;
 
 			s->session->cipher = S3I(s)->hs.new_cipher;
@@ -429,14 +426,6 @@ ssl3_connect(SSL *s)
 				goto end;
 			}
 
-			break;
-
-		case SSL3_ST_CW_NEXT_PROTO_A:
-		case SSL3_ST_CW_NEXT_PROTO_B:
-			ret = ssl3_send_next_proto(s);
-			if (ret <= 0)
-				goto end;
-			S3I(s)->hs.state = SSL3_ST_CW_FINISHED_A;
 			break;
 
 		case SSL3_ST_CW_FINISHED_A:
@@ -1162,8 +1151,6 @@ ssl3_get_server_kex_dhe(SSL *s, EVP_PKEY **pkey, unsigned char **pp, long *nn)
 
 	if (alg_a & SSL_aRSA)
 		*pkey = X509_get_pubkey(sc->peer_pkeys[SSL_PKEY_RSA_ENC].x509);
-	else if (alg_a & SSL_aDSS)
-		*pkey = X509_get_pubkey(sc->peer_pkeys[SSL_PKEY_DSA_SIGN].x509);
 	else
 		/* XXX - Anonymous DH, so no certificate or pkey. */
 		*pkey = NULL;
@@ -1634,9 +1621,7 @@ ssl3_get_certificate_request(SSL *s)
 			SSLerror(s, SSL_R_DATA_LENGTH_TOO_LONG);
 			goto err;
 		}
-		if ((CBS_len(&sigalgs) & 1) ||
-		    !tls1_process_sigalgs(s, CBS_data(&sigalgs),
-		    CBS_len(&sigalgs))) {
+		if (!tls1_process_sigalgs(s, &sigalgs)) {
 			ssl3_send_alert(s, SSL3_AL_FATAL, SSL_AD_DECODE_ERROR);
 			SSLerror(s, SSL_R_SIGNATURE_ALGORITHMS_ERROR);
 			goto err;
@@ -2395,16 +2380,6 @@ ssl3_send_client_verify(SSL *s)
 			}
 			s2n(u, p);
 			n = u + 2;
-		} else if (pkey->type == EVP_PKEY_DSA) {
-			if (!DSA_sign(pkey->save_type,
-			    &(data[MD5_DIGEST_LENGTH]),
-			    SHA_DIGEST_LENGTH, &(p[2]),
-			    (unsigned int *)&j, pkey->pkey.dsa)) {
-				SSLerror(s, ERR_R_DSA_LIB);
-				goto err;
-			}
-			s2n(j, p);
-			n = j + 2;
 		} else if (pkey->type == EVP_PKEY_EC) {
 			if (!ECDSA_sign(pkey->save_type,
 			    &(data[MD5_DIGEST_LENGTH]),
@@ -2593,13 +2568,8 @@ ssl3_check_cert_and_algorithm(SSL *s)
 	if ((alg_a & SSL_aRSA) && !has_bits(i, EVP_PK_RSA|EVP_PKT_SIGN)) {
 		SSLerror(s, SSL_R_MISSING_RSA_SIGNING_CERT);
 		goto f_err;
-	} else if ((alg_a & SSL_aDSS) &&
-	    !has_bits(i, EVP_PK_DSA|EVP_PKT_SIGN)) {
-		SSLerror(s, SSL_R_MISSING_DSA_SIGNING_CERT);
-		goto f_err;
 	}
-	if ((alg_k & SSL_kRSA) &&
-	    !has_bits(i, EVP_PK_RSA|EVP_PKT_ENC)) {
+	if ((alg_k & SSL_kRSA) && !has_bits(i, EVP_PK_RSA|EVP_PKT_ENC)) {
 		SSLerror(s, SSL_R_MISSING_RSA_ENCRYPTING_CERT);
 		goto f_err;
 	}
@@ -2614,45 +2584,6 @@ f_err:
 	ssl3_send_alert(s, SSL3_AL_FATAL, SSL_AD_HANDSHAKE_FAILURE);
 err:
 	return (0);
-}
-
-int
-ssl3_send_next_proto(SSL *s)
-{
-	CBB cbb, nextproto, npn, padding;
-	size_t pad_len;
-	uint8_t *pad;
-
-	memset(&cbb, 0, sizeof(cbb));
-
-	if (S3I(s)->hs.state == SSL3_ST_CW_NEXT_PROTO_A) {
-		pad_len = 32 - ((s->internal->next_proto_negotiated_len + 2) % 32);
-
-		if (!ssl3_handshake_msg_start_cbb(s, &cbb, &nextproto,
-		    SSL3_MT_NEXT_PROTO))
-			goto err;
-		if (!CBB_add_u8_length_prefixed(&nextproto, &npn))
-			goto err;
-		if (!CBB_add_bytes(&npn, s->internal->next_proto_negotiated,
-		    s->internal->next_proto_negotiated_len))
-			goto err;
-		if (!CBB_add_u8_length_prefixed(&nextproto, &padding))
-			goto err;
-		if (!CBB_add_space(&padding, &pad, pad_len))
-			goto err;
-		memset(pad, 0, pad_len);
-		if (!ssl3_handshake_msg_finish_cbb(s, &cbb))
-			goto err;
-
-		S3I(s)->hs.state = SSL3_ST_CW_NEXT_PROTO_B;
-	}
-
-	return (ssl3_handshake_write(s));
-
- err:
-	CBB_cleanup(&cbb);
-
-	return (-1);
 }
 
 /*

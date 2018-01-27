@@ -168,6 +168,11 @@ set_source_files_properties(exptest.c PROPERTIES COMPILE_FLAGS -ULIBRESSL_INTERN
 target_link_libraries(exptest ${TESTS_LIBS})
 add_test(exptest exptest)
 
+# freenull
+add_executable(freenull freenull.c)
+target_link_libraries(freenull ${TESTS_LIBS})
+add_test(freenull freenull)
+
 # gcm128test
 add_executable(gcm128test gcm128test.c)
 target_link_libraries(gcm128test ${TESTS_LIBS})
@@ -365,6 +370,11 @@ set_tests_properties(testrsa PROPERTIES ENVIRONMENT "srcdir=${CMAKE_CURRENT_SOUR
 add_executable(timingsafe timingsafe.c)
 target_link_libraries(timingsafe ${TESTS_LIBS})
 add_test(timingsafe timingsafe)
+
+# tlsexttest
+add_executable(tlsexttest tlsexttest.c)
+target_link_libraries(tlsexttest ${TESTS_LIBS})
+add_test(tlsexttest tlsexttest)
 
 # tlstest
 set(TLSTEST_SRC tlstest.c)

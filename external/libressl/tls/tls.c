@@ -1,4 +1,4 @@
-/* $OpenBSD: tls.c,v 1.68 2017/07/06 17:12:22 jsing Exp $ */
+/* $OpenBSD: tls.c,v 1.71 2017/09/20 17:05:17 jsing Exp $ */
 /*
  * Copyright (c) 2014 Joel Sing <jsing@openbsd.org>
  *
@@ -235,7 +235,11 @@ tls_new(void)
 		return (NULL);
 
 	tls_reset(ctx);
-	tls_configure(ctx, tls_config_default);
+
+	if (tls_configure(ctx, tls_config_default) == -1) {
+		free(ctx);
+		return NULL;
+	}
 
 	return (ctx);
 }
@@ -249,7 +253,9 @@ tls_configure(struct tls *ctx, struct tls_config *config)
 	config->refcount++;
 
 	tls_config_free(ctx->config);
+
 	ctx->config = config;
+	ctx->keypair = config->keypair;
 
 	if ((ctx->flags & TLS_SERVER) != 0)
 		return (tls_configure_server(ctx));
@@ -283,11 +289,12 @@ tls_cert_hash(X509 *cert, char **hash)
 }
 
 static int
-tls_keypair_cert_hash(struct tls_keypair *keypair, char **hash)
+tls_keypair_pubkey_hash(struct tls_keypair *keypair, char **hash)
 {
 	BIO *membio = NULL;
 	X509 *cert = NULL;
-	int rv = -1;
+	char d[EVP_MAX_MD_SIZE], *dhex = NULL;
+	int dlen, rv = -1;
 
 	*hash = NULL;
 
@@ -298,9 +305,21 @@ tls_keypair_cert_hash(struct tls_keypair *keypair, char **hash)
 	    NULL)) == NULL)
 		goto err;
 
-	rv = tls_cert_hash(cert, hash);
+	if (X509_pubkey_digest(cert, EVP_sha256(), d, &dlen) != 1)
+		goto err;
+
+	if (tls_hex_string(d, dlen, &dhex, NULL) != 0)
+		goto err;
+
+	if (asprintf(hash, "SHA256:%s", dhex) == -1) {
+		*hash = NULL;
+		goto err;
+	}
+
+	rv = 0;
 
  err:
+	free(dhex);
 	X509_free(cert);
 	BIO_free(membio);
 
@@ -331,7 +350,7 @@ tls_configure_ssl_keypair(struct tls *ctx, SSL_CTX *ssl_ctx,
 			tls_set_errorx(ctx, "failed to load certificate");
 			goto err;
 		}
-		if (tls_keypair_cert_hash(keypair, &keypair->cert_hash) == -1)
+		if (tls_keypair_pubkey_hash(keypair, &keypair->pubkey_hash) == -1)
 			goto err;
 	}
 
@@ -352,11 +371,11 @@ tls_configure_ssl_keypair(struct tls *ctx, SSL_CTX *ssl_ctx,
 			goto err;
 		}
 
-		if (keypair->cert_hash != NULL) {
+		if (keypair->pubkey_hash != NULL) {
 			RSA *rsa;
 			/* XXX only RSA for now for relayd privsep */
 			if ((rsa = EVP_PKEY_get1_RSA(pkey)) != NULL) {
-				RSA_set_ex_data(rsa, 0, keypair->cert_hash);
+				RSA_set_ex_data(rsa, 0, keypair->pubkey_hash);
 				RSA_free(rsa);
 			}
 		}

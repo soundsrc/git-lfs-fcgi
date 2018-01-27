@@ -45,6 +45,7 @@ Makefile.in
 # man pages
 *.1
 *.3
+*.5
 
 # tests
 test-driver
@@ -55,6 +56,7 @@ tests/arc4random_fork*
 tests/asn1time*
 tests/cipher*
 tests/explicit_bzero*
+tests/freenull*
 tests/gost2814789t*
 tests/mont*
 tests/rfc5280time*

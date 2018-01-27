@@ -1,4 +1,4 @@
-/* $OpenBSD: ssl_srvr.c,v 1.17 2017/05/07 04:22:24 beck Exp $ */
+/* $OpenBSD: ssl_srvr.c,v 1.22 2017/08/12 21:47:59 jsing Exp $ */
 /* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
  * All rights reserved.
  *
@@ -468,10 +468,7 @@ ssl3_accept(SSL *s)
 				 * the client uses its key from the certificate
 				 * for key exchange.
 				 */
-				if (S3I(s)->next_proto_neg_seen)
-					S3I(s)->hs.state = SSL3_ST_SR_NEXT_PROTO_A;
-				else
-					S3I(s)->hs.state = SSL3_ST_SR_FINISHED_A;
+				S3I(s)->hs.state = SSL3_ST_SR_FINISHED_A;
 				s->internal->init_num = 0;
 			} else if (SSL_USE_SIGALGS(s) || (alg_k & SSL_kGOST)) {
 				S3I(s)->hs.state = SSL3_ST_SR_CERT_VRFY_A;
@@ -525,20 +522,8 @@ ssl3_accept(SSL *s)
 			if (ret <= 0)
 				goto end;
 
-			if (S3I(s)->next_proto_neg_seen)
-				S3I(s)->hs.state = SSL3_ST_SR_NEXT_PROTO_A;
-			else
-				S3I(s)->hs.state = SSL3_ST_SR_FINISHED_A;
-			s->internal->init_num = 0;
-			break;
-
-		case SSL3_ST_SR_NEXT_PROTO_A:
-		case SSL3_ST_SR_NEXT_PROTO_B:
-			ret = ssl3_get_next_proto(s);
-			if (ret <= 0)
-				goto end;
-			s->internal->init_num = 0;
 			S3I(s)->hs.state = SSL3_ST_SR_FINISHED_A;
+			s->internal->init_num = 0;
 			break;
 
 		case SSL3_ST_SR_FINISHED_A:
@@ -610,15 +595,9 @@ ssl3_accept(SSL *s)
 			if (ret <= 0)
 				goto end;
 			S3I(s)->hs.state = SSL3_ST_SW_FLUSH;
-			if (s->internal->hit) {
-				if (S3I(s)->next_proto_neg_seen) {
-					s->s3->flags |= SSL3_FLAGS_CCS_OK;
-					S3I(s)->hs.next_state =
-					    SSL3_ST_SR_NEXT_PROTO_A;
-				} else
-					S3I(s)->hs.next_state =
-					    SSL3_ST_SR_FINISHED_A;
-			} else
+			if (s->internal->hit)
+				S3I(s)->hs.next_state = SSL3_ST_SR_FINISHED_A;
+			else
 				S3I(s)->hs.next_state = SSL_ST_OK;
 			s->internal->init_num = 0;
 			break;
@@ -1267,27 +1246,23 @@ ssl3_send_server_kex_dhe(SSL *s, CBB *cbb)
 static int
 ssl3_send_server_kex_ecdhe_ecp(SSL *s, int nid, CBB *cbb)
 {
-	CBB ecpoint;
-	unsigned char *data;
-	EC_KEY *ecdh = NULL, *ecdhp;
 	const EC_GROUP *group;
+	const EC_POINT *pubkey;
+	unsigned char *data;
 	int encoded_len = 0;
 	int curve_id = 0;
 	BN_CTX *bn_ctx = NULL;
+	EC_KEY *ecdh;
+	CBB ecpoint;
 	int al;
 
-	ecdhp = s->cert->ecdh_tmp;
-	if (s->cert->ecdh_tmp_auto != 0) {
-		if (nid != NID_undef)
-			ecdhp = EC_KEY_new_by_curve_name(nid);
-	} else if (ecdhp == NULL && s->cert->ecdh_tmp_cb != NULL) {
-		ecdhp = s->cert->ecdh_tmp_cb(s, 0,
-		    SSL_C_PKEYLENGTH(S3I(s)->hs.new_cipher));
-	}
-	if (ecdhp == NULL) {
-		al = SSL_AD_HANDSHAKE_FAILURE;
-		SSLerror(s, SSL_R_MISSING_TMP_ECDH_KEY);
-		goto f_err;
+	/*
+	 * Only named curves are supported in ECDH ephemeral key exchanges.
+	 * For supported named curves, curve_id is non-zero.
+	 */
+	if ((curve_id = tls1_ec_nid2curve_id(nid)) == 0) {
+		SSLerror(s, SSL_R_UNSUPPORTED_ELLIPTIC_CURVE);
+		goto err;
 	}
 
 	if (S3I(s)->tmp.ecdh != NULL) {
@@ -1295,46 +1270,28 @@ ssl3_send_server_kex_ecdhe_ecp(SSL *s, int nid, CBB *cbb)
 		goto err;
 	}
 
-	/* Duplicate the ECDH structure. */
-	if (s->cert->ecdh_tmp_auto != 0) {
-		ecdh = ecdhp;
-	} else if ((ecdh = EC_KEY_dup(ecdhp)) == NULL) {
+	if ((S3I(s)->tmp.ecdh = EC_KEY_new_by_curve_name(nid)) == NULL) {
+		al = SSL_AD_HANDSHAKE_FAILURE;
+		SSLerror(s, SSL_R_MISSING_TMP_ECDH_KEY);
+		goto f_err;
+	}
+	ecdh = S3I(s)->tmp.ecdh;
+
+	if (!EC_KEY_generate_key(ecdh)) {
 		SSLerror(s, ERR_R_ECDH_LIB);
 		goto err;
 	}
-	S3I(s)->tmp.ecdh = ecdh;
-
-	if ((EC_KEY_get0_public_key(ecdh) == NULL) ||
-	    (EC_KEY_get0_private_key(ecdh) == NULL) ||
-	    (s->internal->options & SSL_OP_SINGLE_ECDH_USE)) {
-		if (!EC_KEY_generate_key(ecdh)) {
-			SSLerror(s, ERR_R_ECDH_LIB);
-			goto err;
-		}
-	}
-
-	if (((group = EC_KEY_get0_group(ecdh)) == NULL) ||
-	    (EC_KEY_get0_public_key(ecdh)  == NULL) ||
-	    (EC_KEY_get0_private_key(ecdh) == NULL)) {
+	if ((group = EC_KEY_get0_group(ecdh)) == NULL ||
+	    (pubkey = EC_KEY_get0_public_key(ecdh)) == NULL ||
+	    EC_KEY_get0_private_key(ecdh) == NULL) {
 		SSLerror(s, ERR_R_ECDH_LIB);
 		goto err;
 	}
 
 	/*
-	 * Only named curves are supported in ECDH ephemeral key exchanges.
-	 * For supported named curves, curve_id is non-zero.
+	 * Encode the public key.
 	 */
-	if ((curve_id = tls1_ec_nid2curve_id(
-	    EC_GROUP_get_curve_name(group))) == 0) {
-		SSLerror(s, SSL_R_UNSUPPORTED_ELLIPTIC_CURVE);
-		goto err;
-	}
-
-	/*
-	 * Encode the public key. First check the size of encoding and
-	 * allocate memory accordingly.
-	 */
-	encoded_len = EC_POINT_point2oct(group, EC_KEY_get0_public_key(ecdh),
+	encoded_len = EC_POINT_point2oct(group, pubkey,
 	    POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
 	if (encoded_len == 0) {
 		SSLerror(s, ERR_R_ECDH_LIB);
@@ -1360,8 +1317,8 @@ ssl3_send_server_kex_ecdhe_ecp(SSL *s, int nid, CBB *cbb)
 		goto err;
 	if (!CBB_add_space(&ecpoint, &data, encoded_len))
 		goto err;
-	if (EC_POINT_point2oct(group, EC_KEY_get0_public_key(ecdh),
-	    POINT_CONVERSION_UNCOMPRESSED, data, encoded_len, bn_ctx) == 0) {
+	if (EC_POINT_point2oct(group, pubkey, POINT_CONVERSION_UNCOMPRESSED,
+	    data, encoded_len, bn_ctx) == 0) {
 		SSLerror(s, ERR_R_ECDH_LIB);
 		goto err;
 	}
@@ -1431,7 +1388,7 @@ ssl3_send_server_kex_ecdhe(SSL *s, CBB *cbb)
 
 	nid = tls1_get_shared_curve(s);
 
-	if (s->cert->ecdh_tmp_auto != 0 && nid == NID_X25519)
+	if (nid == NID_X25519)
 		return ssl3_send_server_kex_ecdhe_ecx(s, nid, cbb);
 
 	return ssl3_send_server_kex_ecdhe_ecp(s, nid, cbb);
@@ -1595,69 +1552,70 @@ ssl3_send_server_key_exchange(SSL *s)
 int
 ssl3_send_certificate_request(SSL *s)
 {
-	unsigned char *p, *d;
-	int i, j, nl, off, n;
+	CBB cbb, cert_request, cert_types, sigalgs, cert_auth, dn;
 	STACK_OF(X509_NAME) *sk = NULL;
 	X509_NAME *name;
-	BUF_MEM *buf;
+	int i;
+
+	/*
+	 * Certificate Request - RFC 5246 section 7.4.4.
+	 */
+
+	memset(&cbb, 0, sizeof(cbb));
 
 	if (S3I(s)->hs.state == SSL3_ST_SW_CERT_REQ_A) {
-		buf = s->internal->init_buf;
+		if (!ssl3_handshake_msg_start_cbb(s, &cbb, &cert_request,
+		    SSL3_MT_CERTIFICATE_REQUEST))
+			goto err;
 
-		d = p = ssl3_handshake_msg_start(s,
-		    SSL3_MT_CERTIFICATE_REQUEST);
-
-		/* get the list of acceptable cert types */
-		p++;
-		n = ssl3_get_req_cert_type(s, p);
-		d[0] = n;
-		p += n;
-		n++;
+		if (!CBB_add_u8_length_prefixed(&cert_request, &cert_types))
+			goto err;
+		if (!ssl3_get_req_cert_types(s, &cert_types))
+			goto err;
 
 		if (SSL_USE_SIGALGS(s)) {
-			nl = tls12_get_req_sig_algs(s, p + 2);
-			s2n(nl, p);
-			p += nl + 2;
-			n += nl + 2;
+			unsigned char *sigalgs_data;
+			size_t sigalgs_len;
+
+			tls12_get_req_sig_algs(s, &sigalgs_data, &sigalgs_len);
+
+			if (!CBB_add_u16_length_prefixed(&cert_request, &sigalgs))
+				goto err;
+			if (!CBB_add_bytes(&sigalgs, sigalgs_data, sigalgs_len))
+				goto err;
 		}
 
-		off = n;
-		p += 2;
-		n += 2;
+		if (!CBB_add_u16_length_prefixed(&cert_request, &cert_auth))
+			goto err;
 
 		sk = SSL_get_client_CA_list(s);
-		nl = 0;
-		if (sk != NULL) {
-			for (i = 0; i < sk_X509_NAME_num(sk); i++) {
-				name = sk_X509_NAME_value(sk, i);
-				j = i2d_X509_NAME(name, NULL);
-				if (!BUF_MEM_grow_clean(buf,
-				    ssl3_handshake_msg_hdr_len(s) + n + j
-				    + 2)) {
-					SSLerror(s, ERR_R_BUF_LIB);
-					goto err;
-				}
-				p = ssl3_handshake_msg_start(s,
-				    SSL3_MT_CERTIFICATE_REQUEST) + n;
-				s2n(j, p);
-				i2d_X509_NAME(name, &p);
-				n += 2 + j;
-				nl += 2 + j;
-			}
-		}
-		/* else no CA names */
-		p = ssl3_handshake_msg_start(s,
-		    SSL3_MT_CERTIFICATE_REQUEST) + off;
-		s2n(nl, p);
+		for (i = 0; i < sk_X509_NAME_num(sk); i++) {
+			unsigned char *name_data;
+			size_t name_len;
 
-		ssl3_handshake_msg_finish(s, n);
+			name = sk_X509_NAME_value(sk, i);
+			name_len = i2d_X509_NAME(name, NULL);
+
+			if (!CBB_add_u16_length_prefixed(&cert_auth, &dn))
+				goto err;
+			if (!CBB_add_space(&dn, &name_data, name_len))
+				goto err;
+			if (i2d_X509_NAME(name, &name_data) != name_len)
+				goto err;
+		}
+
+		if (!ssl3_handshake_msg_finish_cbb(s, &cbb))
+			goto err;
 
 		S3I(s)->hs.state = SSL3_ST_SW_CERT_REQ_B;
 	}
 
 	/* SSL3_ST_SW_CERT_REQ_B */
 	return (ssl3_handshake_write(s));
-err:
+
+ err:
+	CBB_cleanup(&cbb);
+
 	return (-1);
 }
 
@@ -2277,17 +2235,6 @@ ssl3_get_cert_verify(SSL *s)
 			goto f_err;
 		}
 	} else
-	if (pkey->type == EVP_PKEY_DSA) {
-		j = DSA_verify(pkey->save_type,
-		    &(S3I(s)->tmp.cert_verify_md[MD5_DIGEST_LENGTH]),
-		    SHA_DIGEST_LENGTH, p, i, pkey->pkey.dsa);
-		if (j <= 0) {
-			/* bad signature */
-			al = SSL_AD_DECRYPT_ERROR;
-			SSLerror(s, SSL_R_BAD_DSA_SIGNATURE);
-			goto f_err;
-		}
-	} else
 	if (pkey->type == EVP_PKEY_EC) {
 		j = ECDSA_verify(pkey->save_type,
 		    &(S3I(s)->tmp.cert_verify_md[MD5_DIGEST_LENGTH]),
@@ -2739,75 +2686,4 @@ ssl3_send_cert_status(SSL *s)
 	CBB_cleanup(&cbb);
 
 	return (-1);
-}
-
-/*
- * ssl3_get_next_proto reads a Next Protocol Negotiation handshake message.
- * It sets the next_proto member in s if found
- */
-int
-ssl3_get_next_proto(SSL *s)
-{
-	CBS cbs, proto, padding;
-	int ok;
-	long n;
-	size_t len;
-
-	/*
-	 * Clients cannot send a NextProtocol message if we didn't see the
-	 * extension in their ClientHello
-	 */
-	if (!S3I(s)->next_proto_neg_seen) {
-		SSLerror(s, SSL_R_GOT_NEXT_PROTO_WITHOUT_EXTENSION);
-		return (-1);
-	}
-
-	/* 514 maxlen is enough for the payload format below */
-	n = s->method->internal->ssl_get_message(s, SSL3_ST_SR_NEXT_PROTO_A,
-	    SSL3_ST_SR_NEXT_PROTO_B, SSL3_MT_NEXT_PROTO, 514, &ok);
-	if (!ok)
-		return ((int)n);
-
-	/*
-	 * S3I(s)->hs.state doesn't reflect whether ChangeCipherSpec has been received
-	 * in this handshake, but S3I(s)->change_cipher_spec does (will be reset
-	 * by ssl3_get_finished).
-	 */
-	if (!S3I(s)->change_cipher_spec) {
-		SSLerror(s, SSL_R_GOT_NEXT_PROTO_BEFORE_A_CCS);
-		return (-1);
-	}
-
-	if (n < 2)
-		return (0);
-	/* The body must be > 1 bytes long */
-
-	CBS_init(&cbs, s->internal->init_msg, s->internal->init_num);
-
-	/*
-	 * The payload looks like:
-	 *   uint8 proto_len;
-	 *   uint8 proto[proto_len];
-	 *   uint8 padding_len;
-	 *   uint8 padding[padding_len];
-	 */
-	if (!CBS_get_u8_length_prefixed(&cbs, &proto) ||
-	    !CBS_get_u8_length_prefixed(&cbs, &padding) ||
-	    CBS_len(&cbs) != 0)
-		return 0;
-
-	/*
-	 * XXX We should not NULL it, but this matches old behavior of not
-	 * freeing before malloc.
-	 */
-	s->internal->next_proto_negotiated = NULL;
-	s->internal->next_proto_negotiated_len = 0;
-
-	if (!CBS_stow(&proto, &s->internal->next_proto_negotiated, &len)) {
-		SSLerror(s, ERR_R_MALLOC_FAILURE);
-		return (0);
-	}
-	s->internal->next_proto_negotiated_len = (uint8_t)len;
-
-	return (1);
 }

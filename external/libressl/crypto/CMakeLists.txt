@@ -352,10 +352,6 @@ set(
 	ec/ecp_mont.c
 	ec/ecp_nist.c
 	ec/ecp_oct.c
-	ec/ecp_nistp224.c
-	ec/ecp_nistp256.c
-	ec/ecp_nistp521.c
-	ec/ecp_nistputil.c
 	ec/ecp_smpl.c
 	ecdh/ech_err.c
 	ecdh/ech_key.c
@@ -563,7 +559,6 @@ set(
 	rsa/rsa_pss.c
 	rsa/rsa_saos.c
 	rsa/rsa_sign.c
-	rsa/rsa_ssl.c
 	rsa/rsa_x931.c
 	sha/sha1_one.c
 	sha/sha1dgst.c
