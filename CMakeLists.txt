@@ -30,7 +30,7 @@ add_library(mongoose STATIC
 	"external/mongoose/mongoose.h"
 )
 
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/json-c")
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/json-c" EXCLUDE_FROM_ALL)
 
 add_library(sqlite STATIC
 	"external/sqlite/sqlite3.c"
