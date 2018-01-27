@@ -117,13 +117,13 @@ Finally, we can adjust our /etc/httpd.conf to something like this:
 ```
 ext_ip="0.0.0.0"
 server "example.com" {
-        listen on $ext_ip port 80
-		location match "/foo/bar.git/info/lfs/(.*)" {
-		    connection {
-		            max request body 1073741824 # set to any limit
-		    }
-		    fastcgi socket "/run/git-lfs-server/git-lfs-server.sock"
+	listen on $ext_ip port 80
+	location match "/foo/bar.git/info/lfs/(.*)" {
+		connection {
+			max request body 1073741824 # set to any limit
 		}
+		fastcgi socket "/run/git-lfs-server/git-lfs-server.sock"
+	}
 }
 ```
 
