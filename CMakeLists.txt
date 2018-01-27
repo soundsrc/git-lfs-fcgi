@@ -30,33 +30,7 @@ add_library(mongoose STATIC
 	"external/mongoose/mongoose.h"
 )
 
-add_library(json-c STATIC
-	"external/json-c/arraylist.c"
-	"external/json-c/debug.c"
-	"external/json-c/json_c_version.c"
-	"external/json-c/json_object.c"
-	"external/json-c/json_object_iterator.c"
-	"external/json-c/json_tokener.c"
-	"external/json-c/json_util.c"
-	"external/json-c/linkhash.c"
-	"external/json-c/printbuf.c"
-	"external/json-c/random_seed.c"
-	"external/json-c/arraylist.h"
-	"external/json-c/bits.h"
-	"external/json-c/debug.h"
-	"external/json-c/json.h"
-	"external/json-c/json_config.h"
-	"external/json-c/json_c_version.h"
-	"external/json-c/json_inttypes.h"
-	"external/json-c/json_object.h"
-	"external/json-c/json_object_iterator.h"
-	"external/json-c/json_object_private.h"
-	"external/json-c/json_tokener.h"
-	"external/json-c/json_util.h"
-	"external/json-c/linkhash.h"
-	"external/json-c/printbuf.h"
-	"external/json-c/random_seed.h"
-)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/json-c")
 
 add_library(sqlite STATIC
 	"external/sqlite/sqlite3.c"
@@ -148,7 +122,7 @@ SET(INC_DIRS
 
 set(LIB_FILES
 	"mongoose"
-	"json-c"
+	"json-c-static"
 	"fcgi"
 	"sqlite"
 	"pthread")
