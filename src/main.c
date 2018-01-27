@@ -77,10 +77,8 @@ int main(int argc, char *argv[])
 	}
 	
 	struct git_lfs_config *config = git_lfs_load_config(config_path);
-	if(!config) {
-		fprintf(stderr, "Unable to load config.\n");
-		goto error0;
-	}
+	if(!config) goto error0;
+
 	config->verbose = verbose;
 
 	if(verbose)
@@ -120,7 +118,7 @@ int main(int argc, char *argv[])
 	
 	int fd[2];
 	if(os_socketpair(fd) < 0) {
-		fprintf(stderr, "Failed to create sockets.\n");
+		fprintf(stderr, "Failed to create internal sockets.\n");
 		goto error1;
 	}
 	
@@ -136,7 +134,6 @@ int main(int argc, char *argv[])
 	{
 		if(os_droproot(config->chroot_path, config->user, config->group) < 0)
 		{
-			fprintf(stderr, "Failed to chroot and change to user '%s' and group '%s'.\n", config->user, config->group);
 			goto error1;
 		}
 		
@@ -165,7 +162,6 @@ int main(int argc, char *argv[])
 
 		if(os_droproot(config->process_chroot, config->user, config->group) < 0)
 		{
-			fprintf(stderr, "Failed to chroot and change to user '%s' and group '%s'.\n", config->user, config->group);
 			goto error1;
 		}
 

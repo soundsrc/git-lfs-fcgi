@@ -28,12 +28,14 @@ int os_droproot(const char *chroot_path, const char *user, const char *group)
 
 	struct passwd *pwd = getpwnam(user);
 	if(!pwd) {
+		fprintf(stderr, "Failed to resolve user '%s'. User does not exist?\n", user);
 		return -1;
 	}
 	uid = pwd->pw_uid;
 	
 	struct group *grp = getgrnam(group);
 	if(!grp) {
+		fprintf(stderr, "Failed to resolve group '%s'. Group does not exist?\n", group);
 		return -1;
 	}
 	gid = grp->gr_gid;
@@ -41,21 +43,23 @@ int os_droproot(const char *chroot_path, const char *user, const char *group)
 	if(chroot_path)
 	{
 		if(chdir(chroot_path) < 0) {
+			fprintf(stderr, "Failed to chroot to directory '%s'.\n", chroot_path);
 			return -1;
 		}
 		
 		if(chroot(chroot_path) < 0) {
+			fprintf(stderr, "Failed to chroot to directory '%s'.\n", chroot_path);
 			return -1;
 		}
 	}
 
 	if(setgid(gid) < 0) {
-		fprintf(stderr, "Failed to drop group privilege.\n");
+		fprintf(stderr, "Failed to change to group '%s'.\n", group);
 		return -1;
 	}
 	
 	if(setuid(uid) < 0) {
-		fprintf(stderr, "Failed to drop user privilege.\n");
+		fprintf(stderr, "Failed to change to user '%s'.\n", user);
 		return -1;
 	}
 	

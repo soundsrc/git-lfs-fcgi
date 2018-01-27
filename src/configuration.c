@@ -73,7 +73,7 @@ struct git_lfs_config *git_lfs_load_config(const char *path)
 			if(0 != strncmp(config->chroot_path, repo->full_root_dir, chroot_path_len) ||
 			   repo->full_root_dir[chroot_path_len] != '/')
 			{
-				fprintf(stderr, "Repo '%s' root_dir (%s) is not inside the chroot_dir (%s).\n", repo->name, repo->full_root_dir, config->chroot_path);
+				fprintf(stderr, "error: The repo '%s' root_dir (%s) must start with the chroot_path (%s).\n", repo->name, repo->full_root_dir, config->chroot_path);
 				goto error;
 			}
 			
@@ -90,13 +90,13 @@ struct git_lfs_config *git_lfs_load_config(const char *path)
 		config->fastcgi_socket = strdup("/var/lib/git-lfs-server/run/git-lfs-server.sock");
 	}
 	
-	if(config->fastcgi_socket[0] == '/')
+	if(config->fastcgi_server && config->fastcgi_socket[0] != ':')
 	{
 		size_t process_chroot_path_len = strlen(config->process_chroot);
 		if(0 != strncmp(config->fastcgi_socket, config->process_chroot, process_chroot_path_len) ||
 		   config->fastcgi_socket[process_chroot_path_len] != '/')
 		{
-			fprintf(stderr, "FastCGI socket path must be contained in %s.\n", config->process_chroot);
+			fprintf(stderr, "FastCGI socket path (%s) must start with '%s'.\n", config->fastcgi_socket, config->process_chroot);
 			goto error;
 		}
 		

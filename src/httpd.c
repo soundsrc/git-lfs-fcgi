@@ -392,7 +392,7 @@ int git_lfs_start_httpd(struct repo_manager *mgr, const struct git_lfs_config *c
 
 		struct mg_context *context = mg_start(&callbacks, &info, mg_options);
 		if(!context) {
-			fprintf(stderr,"Failed to start server.\n");
+			fprintf(stderr, "Failed to start web server.\n");
 			return -1;
 		}
 		
@@ -415,13 +415,13 @@ int git_lfs_start_httpd(struct repo_manager *mgr, const struct git_lfs_config *c
 		int saved_umask = os_umask(0);
 		int listening_socket = FCGX_OpenSocket(config->fastcgi_socket, 400);
 		if(listening_socket < 0) {
-			fprintf(stderr, "Failed to create socket.");
+			fprintf(stderr, "Failed to create FastCGI socket '%s'.", config->fastcgi_socket);
 			return -1;
 		}
 		os_umask(saved_umask);
 		
 		if(config->num_threads < 1 || config->num_threads > 256) {
-			fprintf(stderr, "Invalid number of threads (%d) specified.\n", config->num_threads);
+			fprintf(stderr, "Invalid number of threads (%d) specified. Must be >= 1 and < 256.\n", config->num_threads);
 			return -1;
 		}
 
