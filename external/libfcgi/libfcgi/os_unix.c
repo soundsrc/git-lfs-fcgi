@@ -43,6 +43,8 @@
 #include <sys/un.h>
 #include <signal.h>
 
+#include "../../../compat/string.h"
+
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
 #endif
@@ -292,7 +294,11 @@ int OS_CreateLocalIpcFd(const char *bindPath, int backlog)
     short   port = 0;
     char    host[MAXPATHLEN];
 
-    strcpy(host, bindPath);
+	if (strlcpy(host, bindPath, sizeof(host)) >= sizeof(host)) {
+		fprintf(stderr, "bindPath too long.\n");
+		exit(1);
+	}
+		
     if((tp = strchr(host, ':')) != 0) {
 	*tp++ = 0;
 	if((port = atoi(tp)) == 0) {
@@ -395,7 +401,11 @@ int OS_FcgiConnect(char *bindPath)
     short   port = 0;
     int	    tcp = FALSE;
 
-    strcpy(host, bindPath);
+	if (strlcpy(host, bindPath, sizeof(host)) >= sizeof(host)) {
+		fprintf(stderr, "bindPath is too long.\n");
+		exit(1);
+	}
+
     if((tp = strchr(host, ':')) != 0) {
 	*tp++ = 0;
 	if((port = atoi(tp)) == 0) {
@@ -921,10 +931,11 @@ int OS_DoIo(struct timeval *tmo)
  */
 static char * str_dup(const char * str)
 {
-    char * sdup = (char *) malloc(strlen(str) + 1);
+	size_t len = strlen(str) + 1;
+    char * sdup = (char *) malloc(len);
 
     if (sdup)
-        strcpy(sdup, str);
+        strlcpy(sdup, str, len);
 
     return sdup;
 }

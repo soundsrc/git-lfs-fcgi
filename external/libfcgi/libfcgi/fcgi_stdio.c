@@ -489,30 +489,6 @@ char *FCGI_fgets(char *str, int size, FCGI_FILE *fp)
 }
 
 /*
- * The gets() function reads characters from the standard input stream
- * into the array pointed to by str until a newline character is read
- * or an end-of-file condition is encountered.  The newline character
- * is discarded and the string is terminated with a null character. 
- */
-char *FCGI_gets(char *str)
-{
-    char *s;
-    int c;
-
-    for (s = str; ((c = FCGI_getchar()) != '\n');) {
-        if(c == EOF) {
-            if(s == str)
-                return NULL;
-            else
-                break;
-        } else
-            *s++ = (char) c;
-    }
-    *s = 0;
-    return str;
-}
-
-/*
  *----------------------------------------------------------------------
  *
  *       Wrappers for functions defined in H&S Section 15.8
