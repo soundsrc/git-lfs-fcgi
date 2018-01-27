@@ -141,9 +141,12 @@ Pre-running checklist.
 
 1) Make sure /etc/git-lfs-server/git-lfs-server.conf is setup
 
-2) Web server configured with FastCGI 
+2) Make sure the base_url in the global configuration is properly set. If incorrectly set, this
+may result in upload / download failures.
 
-3) Run the git-lfs FastCGI server
+3) Web server configured with FastCGI. Ensure that request size limits are good.
+
+4) Run the git-lfs FastCGI server
 
 ```
 ./git-lfs-server
@@ -160,6 +163,20 @@ Then you can start the server systemd style:
 
 ```
 systemctl git-lfs-server start
+```
+
+
+## Client setup
+
+If you have a Git repository setup at https://git-server.com/foo/bar.git and you have followed the instructions
+to setup Git LFS to listen on https://git-server.com/foo/bar.git/info/lfs, there is no additional client configuration.
+GIT LFS clients will automatically detect LFS servers setup with /info/lfs appended to the repository URL.
+This is the most ideal way to setup your GIT LFS server.
+
+For custom URLs, set the lfs.url property on your repositories. For example:
+
+```
+git config lfs.url https://git-server.com/foo/bar.git/info/lfs
 ```
 
 ## Repository data format
