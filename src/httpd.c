@@ -383,6 +383,12 @@ int git_lfs_start_httpd(struct repo_manager *mgr, const struct git_lfs_config *c
 		info.config = config;
 		info.repo_mgr = mgr;
 		
+		if(os_sandbox(SANDBOX_INET_SOCKET) < 0)
+		{
+			fprintf(stderr, "Sandbox failed.\n");
+			return -1;
+		}
+
 		struct mg_context *context = mg_start(&callbacks, &info, mg_options);
 		if(!context) {
 			fprintf(stderr,"Failed to start server.\n");
@@ -421,6 +427,13 @@ int git_lfs_start_httpd(struct repo_manager *mgr, const struct git_lfs_config *c
 		os_signal(SIGINT, fcgi_term_handler);
 		os_signal(SIGTERM, fcgi_term_handler);
 		
+		// only allow internet
+		if(os_sandbox(config->fastcgi_socket[0] != ':' ? SANDBOX_UNIX_SOCKET : SANDBOX_INET_SOCKET) < 0)
+		{
+			fprintf(stderr, "Sandbox failed.\n");
+			return -1;
+		}
+
 		struct thread_info *thread_infos = (struct thread_info *)calloc(config->num_threads, sizeof(struct thread_info));
 		if(!thread_infos)
 		{

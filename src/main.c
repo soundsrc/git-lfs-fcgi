@@ -169,13 +169,6 @@ int main(int argc, char *argv[])
 			goto error1;
 		}
 
-		// only allow internet
-		if(os_sandbox(SANDBOX_INET_SOCKET) < 0)
-		{
-			fprintf(stderr, "Sandbox failed.\n");
-			goto error1;
-		}
-
 		os_close(fd[1]);
 		struct repo_manager *mgr = repo_manager_create(fd[0]);
 		git_lfs_start_httpd(mgr, config);

@@ -21,11 +21,11 @@ int os_sandbox(enum sandbox_profile profile)
 {
 	switch(profile) {
 		case SANDBOX_FILEIO:
-			return pledge("stdio cpath rpath wpath", NULL);
+			return pledge("stdio cpath rpath wpath flock sendfd recvfd", NULL);
 		case SANDBOX_INET_SOCKET:
-			return pledge("stdio inet", NULL);
+			return pledge("stdio inet sendfd recvfd", NULL);
 		case SANDBOX_UNIX_SOCKET:
-			return pledge("stdio unix", NULL);
+			return pledge("stdio unix sendfd recvfd", NULL);
 		case SANDBOX_COMPUTE:
 			return pledge("stdio", NULL);
 	}
