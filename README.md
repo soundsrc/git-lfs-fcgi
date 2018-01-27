@@ -97,6 +97,36 @@ location /foo/bar.git/info/lfs {
 
 TODO
 
+### OpenBSD httpd
+
+OpenBSD is a bit more tricky as the default webserver is chroot'ed to /var/www and
+the FastCGI socket should be located inside the webserver chroot.
+
+First, create a directory for the git-lfs socket:
+```
+install -d -m 0711 -o git-lfs -g git-lfs /var/www/run/git-lfs-server
+```
+
+In the global configuration /etc/git-lfs-server/git-lfs-server.conf, we should
+set the process_chroot and fastcgi_socket option to point to within the chroot:
+```
+process_chroot "/var/www/run/git-lfs-server"
+fastcgi_socket "/var/www/run/git-lfs-server/git-lfs-server.sock"
+```
+
+Finally, we can adjust our /etc/httpd.conf to something like this:
+```
+ext_ip="0.0.0.0"
+server "example.com" {
+        listen on $ext_ip port 80
+		location match "/foo/bar.git/info/lfs/(.*)" {
+		    connection {
+		            max request body 1073741824 # set to any limit
+		    }
+		    fastcgi socket "/run/git-lfs-server/git-lfs-server.sock"
+		}
+}
+```
 
 ## Repository data format
 
