@@ -279,8 +279,9 @@ error1:
 		git_lfs_write_error(io, 404, "No repo at this URL.");
 	}
 	
-	free(query_copy);
 error0:
+	free(query_copy);
+
 	while(!SLIST_EMPTY(&query_params))
 	{
 		struct query_param *param = SLIST_FIRST(&query_params);
