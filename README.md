@@ -51,7 +51,7 @@ Create a file at /etc/git-lfs-server/git-lfs-server.conf and the configuration m
 
 ```
 base_url "https://git-server.com"
-chroot_dir "/var/lib/git-lfs-server"
+chroot_path "/var/lib/git-lfs-server"
 repo "Foobar Repository"
 {
 	uri "/foo/bar.git/info/lfs"
