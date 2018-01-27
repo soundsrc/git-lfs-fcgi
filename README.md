@@ -4,14 +4,20 @@
 
 This is an implementation of a FastCGI GIT LFS server using the v1 batch API.
 
-This server is designed to be used when you already are serving Git over HTTP with an
-existing webserver and you want to add LFS support. It is a FastCGI binary that should
-interface with most webservers after a bit of configuration.
+This server is designed to be used when Git repositories are already hosted over HTTP 
+using an existing webserver and you want to add LFS support. It is a FastCGI binary
+that should interface with most webservers after a bit of configuration.
 
 # TODO
 
-* Support permissions on Git LFS locks
 * Test suite
+
+# Bugs
+
+This server does not read information about the git repositories that it serves.
+Therefore it is very permissive with file locking. There is no permission
+enforcements on who or what files can be locked and files that don't exists can
+be locked as well.
 
 ## Building from source
 
@@ -70,13 +76,15 @@ See:
 
 ## FastCGI configuration
 
-Using the example of https://git-server.com/foo/bar.git/info/lfs,
+A webserver should be configured to pass LFS request to the FastCGI server.
+The webserver is ideally be secured with HTTPS and authentication.
+
+Using the example of handling https://git-server.com/foo/bar.git/info/lfs,
 the webserver should now be configured to listen on the URI /foo/bar.git/info/lfs
 and have the request passed via FastCGI to the socket listening on
 
 /var/lib/git-lfs-server/run/git-lfs-server.sock
 
-The webserver should also ideally be secured with HTTPS and authentication.
 Instructions for setting this up will vary depending on the webserver.
 
 ### NGINX
@@ -125,6 +133,33 @@ server "example.com" {
 		fastcgi socket "/run/git-lfs-server/git-lfs-server.sock"
 	}
 }
+```
+
+## Running the server
+
+Pre-running checklist.
+
+1) Make sure /etc/git-lfs-server/git-lfs-server.conf is setup
+
+2) Web server configured with FastCGI 
+
+3) Run the git-lfs FastCGI server
+
+```
+./git-lfs-server
+```
+
+By default, git-lfs-server runs in the foreground but you can use the shell & to background the process.
+
+```
+./git-lfs-server &
+```
+
+On systemd systems, there is a conf/git-lfs-server.service file which you can copy into your /etc/systemd/system folder.
+Then you can start the server systemd style:
+
+```
+servicectl git-lfs-server start
 ```
 
 ## Repository data format
