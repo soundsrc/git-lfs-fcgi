@@ -8,11 +8,11 @@ This server is designed to be used when Git repositories are already hosted over
 using an existing webserver and you want to add LFS support. It is a FastCGI binary
 that should interface with most webservers after a bit of configuration.
 
-# TODO
+## TODO
 
 * Test suite
 
-# Bugs
+## Bugs
 
 This server does not read information about the git repositories that it serves.
 Therefore it is very permissive with file locking. There is no permission
