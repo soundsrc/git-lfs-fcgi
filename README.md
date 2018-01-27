@@ -4,12 +4,12 @@
 
 This is an implementation of a FastCGI GIT LFS server using the v1 batch API.
 
-This server is designed to serve multiple respositories and is a FastCGI binary
-to plug into an existing webserver.
+This server is designed to be used when you already are serving Git over HTTP with an
+existing webserver and you want to add LFS support. It is a FastCGI binary that should
+interface with most webservers after a bit of configuration.
 
 # TODO
 
-* SSH authentication tool
 * Support permissions on Git LFS locks
 * Test suite
 
@@ -29,12 +29,11 @@ sudo groupadd git-lfs
 sudo useradd git-lfs
 ```
 
-Also create the /var/lib/git-lfs-server directory.
+Also create the /var/lib/git-lfs-server/run directory and make them accessible by the git-lfs user.
 
 ```
-sudo mkdir /var/lib/git-lfs-server
-sudo mkdir /var/lib/git-lfs-server/run
-sudo chown -R git-lfs:git-lfs /var/lib/git-lfs-server
+sudo install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-server
+sudo install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-server/run
 ```
 
 
@@ -99,8 +98,8 @@ TODO
 
 ### OpenBSD httpd
 
-OpenBSD is a bit more tricky as the default webserver is chroot'ed to /var/www and
-the FastCGI socket should be located inside the webserver chroot.
+OpenBSD httpd is a bit more tricky as the default webserver is chroot'ed to /var/www and
+the FastCGI socket must be located inside the webserver chroot.
 
 First, create a directory for the git-lfs socket:
 ```
@@ -108,7 +107,7 @@ install -d -m 0711 -o git-lfs -g git-lfs /var/www/run/git-lfs-server
 ```
 
 In the global configuration /etc/git-lfs-server/git-lfs-server.conf, we should
-set the process_chroot and fastcgi_socket option to point to within the chroot:
+define the process_chroot and fastcgi_socket option to point to within the /var/www/ chroot:
 ```
 process_chroot "/var/www/run/git-lfs-server"
 fastcgi_socket "/var/www/run/git-lfs-server/git-lfs-server.sock"
