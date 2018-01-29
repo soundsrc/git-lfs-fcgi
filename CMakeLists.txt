@@ -15,7 +15,7 @@ elseif (${CMAKE_SYSTEM_NAME} MATCHES "OpenBSD")
 	set(OPENBSD TRUE)
 endif()
 
-if(LINUX)
+if(LINUX OR FREEBSD OR OPENBSD)
 	set(CMAKE_C_FLAGS "-std=gnu99")
 endif()
 
