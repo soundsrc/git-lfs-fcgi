@@ -7,8 +7,12 @@ include(FindOpenSSL)
 find_package(BISON)
 find_package(FLEX)
 
-if(UNIX AND NOT APPLE)
+if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 	set(LINUX TRUE)
+elseif (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+	set(FREEBSD TRUE)
+elseif (${CMAKE_SYSTEM_NAME} MATCHES "OpenBSD")
+	set(OPENBSD TRUE)
 endif()
 
 if(LINUX)
@@ -101,6 +105,12 @@ if(APPLE)
 		"os/macosx/sandbox.c"
 	)
 endif(APPLE)
+
+if(OPENBSD)
+	list(APPEND SRC_FILES
+		"os/openbsd/sandbox.c"
+	)
+endif(OPENBSD)
 
 if(LINUX)
 	list(APPEND SRC_FILES
