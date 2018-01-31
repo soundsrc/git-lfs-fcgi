@@ -42,6 +42,7 @@
 #include <sys/time.h>
 #include <sys/un.h>
 #include <signal.h>
+#include <poll.h>
 
 #include "../../../compat/string.h"
 
@@ -104,6 +105,9 @@ static int volatile maxFd = -1;
 
 static int shutdownPending = FALSE;
 static int shutdownNow = FALSE;
+
+static int libfcgiOsClosePollTimeout = 2000;
+static int libfcgiIsAfUnixKeeperPollTimeout = 2000;
 
 void OS_ShutdownPending()
 {
@@ -169,6 +173,16 @@ int OS_LibInit(int stdioFds[3])
 {
     if(libInitialized)
         return 0;
+
+    char *libfcgiOsClosePollTimeoutStr = getenv( "LIBFCGI_OS_CLOSE_POLL_TIMEOUT" );
+    if(libfcgiOsClosePollTimeoutStr) {
+        libfcgiOsClosePollTimeout = atoi(libfcgiOsClosePollTimeoutStr);
+    }
+
+    char *libfcgiIsAfUnixKeeperPollTimeoutStr = getenv( "LIBFCGI_IS_AF_UNIX_KEEPER_POLL_TIMEOUT" );
+    if(libfcgiIsAfUnixKeeperPollTimeoutStr) {
+        libfcgiIsAfUnixKeeperPollTimeout = atoi(libfcgiIsAfUnixKeeperPollTimeoutStr);
+    }
 
     asyncIoTable = (AioInfo *)malloc(asyncIoTableSize * sizeof(AioInfo));
     if(asyncIoTable == NULL) {
@@ -765,19 +779,16 @@ int OS_Close(int fd)
 
     if (shutdown(fd, 1) == 0)
     {
-        struct timeval tv;
-        fd_set rfds;
+        struct pollfd pfd;
         int rv;
         char trash[1024];
 
-        FD_ZERO(&rfds);
+        pfd.fd = fd;
+        pfd.events = POLLIN;
 
         do 
         {
-            FD_SET(fd, &rfds);
-            tv.tv_sec = 2;
-            tv.tv_usec = 0;
-            rv = select(fd + 1, &rfds, NULL, NULL, &tv);
+            rv = poll(&pfd, 1, libfcgiOsClosePollTimeout);
         }
         while (rv > 0 && read(fd, trash, sizeof(trash)) > 0);
     }
@@ -1127,13 +1138,11 @@ static int is_reasonable_accept_errno (const int error)
  */
 static int is_af_unix_keeper(const int fd)
 {
-    struct timeval tval = { READABLE_UNIX_FD_DROP_DEAD_TIMEVAL };
-    fd_set read_fds;
+    struct pollfd pfd;
+    pfd.fd = fd;
+    pfd.events = POLLIN;
 
-    FD_ZERO(&read_fds);
-    FD_SET(fd, &read_fds);
-
-    return select(fd + 1, &read_fds, NULL, NULL, &tval) >= 0 && FD_ISSET(fd, &read_fds);
+    return poll(&pfd, 1, libfcgiIsAfUnixKeeperPollTimeout) >= 0 && (pfd.revents & POLLIN);
 }
 
 /*
