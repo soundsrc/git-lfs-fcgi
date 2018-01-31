@@ -561,12 +561,12 @@ static int handle_cmd_commit(struct repo_manager *mgr, const char *access_token,
 			git_lfs_repo_send_error_response(mgr, cookie, "Object %s failed verification. Unexpected hash %s.", oid_str, actual_hash_str);
 			goto done;
 		}
-		
-		if(os_rename(upload->tmp_path, dest_path) < 0)
-		{
-			git_lfs_repo_send_error_response(mgr, cookie, "Object %s failed rename.", oid_str);
-			goto done;
-		}
+	}
+	
+	if(os_rename(upload->tmp_path, dest_path) < 0)
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "Object %s failed rename.", oid_str);
+		goto done;
 	}
 	
 	if(git_lfs_repo_send_response(mgr, REPO_CMD_COMMIT, cookie, NULL, 0, NULL) < 0)
