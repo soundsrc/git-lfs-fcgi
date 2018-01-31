@@ -109,7 +109,7 @@ fastcgi_server { return FASTCGI_SERVER; }
 port { return PORT; }
 root { return ROOT; }
 uri { return URI; }
-verify_upload { return VERIFY_UPLOAD; }
+verify_uploads { return VERIFY_UPLOADS; }
 yes { return YES; }
 no { return NO; }
 user { return USER; }

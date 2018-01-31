@@ -33,7 +33,7 @@ extern int yyerror (const char *msg, ...);
 %token PORT
 %token ROOT
 %token URI
-%token VERIFY_UPLOAD
+%token VERIFY_UPLOADS
 %token YES
 %token NO
 %token FASTCGI_SERVER
@@ -123,12 +123,6 @@ global_declaration
 			YYERROR;
 		}
 	}
-	| VERIFY_UPLOAD YES {
-		parse_config->verify_upload = 1;
-	}
-	| VERIFY_UPLOAD NO {
-		parse_config->verify_upload = 0;
-	}
 	| INCLUDE STRING
 	;
 
@@ -142,6 +136,7 @@ repo_declaration
 		}
 		parse_repo->name = strndup($2, sizeof($2));
 		parse_repo->id = s_next_id++;
+		parse_repo->verify_uploads = 1;
 	}
 	'{' repo_params_list '}' {
 		SLIST_INSERT_HEAD(&parse_config->repos, parse_repo, entries);
@@ -171,6 +166,12 @@ repo_param
 			YYERROR;
 		}
  	}
+	| VERIFY_UPLOADS YES {
+		parse_repo->verify_uploads = 1;
+	}
+	| VERIFY_UPLOADS NO {
+		parse_repo->verify_uploads = 0;
+	}
 	| ENABLE_AUTHENTICATION YES {
 		parse_repo->enable_authentication = 1;
 	}

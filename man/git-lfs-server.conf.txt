@@ -63,11 +63,6 @@ GLOBAL SETTINGS
 	      System group to run the server. Default is: "git-lfs".
 
 
-       verify_upload [yes|no]
-	      Whether uploaded files are verified by comparing the SHA256 with
-	      the file contents before saving it.  Default is true.
-
-
        num_threads NUM
 	      The number of worker threads to use. Increase to allow more con-
 	      current connections.
@@ -144,6 +139,11 @@ REPOSITORY SETTINGS
 	      when  running  as a standalone server. When running as a FastCGI
 	      binary, it's better to let your webserver handle the authentica-
 	      tion.
+
+
+       verify_upload [yes|no]
+	      Whether uploaded files are verified by comparing the SHA256 with
+	      the file contents before saving it.  Default is true.
 
 
        auth_realm NAME

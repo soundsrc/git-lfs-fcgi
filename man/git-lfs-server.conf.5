@@ -51,10 +51,6 @@ to drop its privilege to this user.
 .IP "group GROUP"
 System group to run the server. Default is: "git-lfs".
 
-.IP "verify_upload [yes|no]"
-Whether uploaded files are verified by comparing the SHA256 with the file contents before saving it.
-Default is true.
-
 .IP "num_threads NUM"
 The number of worker threads to use. Increase to allow more concurrent connections.
 
@@ -118,6 +114,10 @@ then this directory must also start with the chroot_path.
 This option is only necessary to enable built-in authentication when running as a standalone
 server. When running as a FastCGI binary, it's better to let your webserver handle the 
 authentication.
+
+.IP "verify_upload [yes|no]"
+Whether uploaded files are verified by comparing the SHA256 with the file contents before saving it.
+Default is true.
 
 .IP "auth_realm NAME"
 Authentication realm name. Optional.

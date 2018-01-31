@@ -532,7 +532,7 @@ static int handle_cmd_commit(struct repo_manager *mgr, const char *access_token,
 		goto done;
 	}
 	
-	if(config->verify_upload)
+	if(upload->repo->verify_uploads)
 	{
 		int fd = os_open_read(upload->tmp_path);
 		int n;

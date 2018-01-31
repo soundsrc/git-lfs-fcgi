@@ -34,7 +34,7 @@ struct git_lfs_repo
 	char *uri; // uri
 	char *full_root_dir; // full path to the root_dir
 	char *root_dir; // root directory for files, relative to chroot_path
-	
+	int verify_uploads; // upload verification
 	int enable_authentication;
 	char *auth_realm;
 	struct htpasswd *auth;
@@ -45,7 +45,6 @@ SLIST_HEAD(git_lfs_repo_list, git_lfs_repo);
 struct git_lfs_config
 {
 	int verbose;
-	int verify_upload;
 	
 	int port; // listening port
 	

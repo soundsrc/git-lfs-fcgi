@@ -99,7 +99,6 @@ int main(int argc, char *argv[])
 		printf("User: %s\n", config->user);
 		printf("Group: %s\n", config->group);
 		printf("Num threads: %d\n", config->num_threads);
-		printf("Verify: %s\n", config->verify_upload ? "yes" : "no");
 		printf("\n");
 		
 		struct git_lfs_repo *repo;
@@ -111,6 +110,7 @@ int main(int argc, char *argv[])
 			printf("\tUrl: %s%s\n", config->base_url, repo->uri);
 			printf("\tRoot path: %s%s\n", config->chroot_path != NULL ? config->chroot_path : "", repo->root_dir);
 			printf("\tAuthentication: %s\n", repo->enable_authentication ? "yes" : "no");
+			printf("\tUpload verification: %s\n", repo->verify_uploads ? "yes" : "no");
 			if(repo->auth_realm) printf("\tAuth Realm: %s\n", repo->auth_realm);
 			printf("\n");
 		}

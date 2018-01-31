@@ -27,7 +27,6 @@ struct git_lfs_config *git_lfs_load_config(const char *path)
 	if(!config) return NULL;
 
 	config->fastcgi_server = 1;
-	config->verify_upload = 1;
 	config->port = 80;
 	config->num_threads = 2;
 
