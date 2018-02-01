@@ -21,7 +21,7 @@
 #include <time.h>
 #include <errno.h>
 #include <openssl/sha.h>
-#include "json.h"
+#include <json-c/json.h>
 #include "compat/string.h"
 #include "compat/queue.h"
 #include "compat/base64.h"

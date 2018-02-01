@@ -7,6 +7,10 @@ include(FindOpenSSL)
 find_package(BISON)
 find_package(FLEX)
 
+find_library(SQLITE3_LIBRARY NAMES sqlite3 libsqlite3)
+find_library(LIBFCGI_LIBRARY NAMES fcgi libfcgi)
+find_library(JSONC_LIBRARY NAMES json-c libjson-c)
+
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 	set(LINUX TRUE)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
@@ -21,12 +25,28 @@ endif()
 
 link_directories("${CMAKE_BINARY_DIR}/lib")
 
-if(NOT OPENSSL_FOUND)
+SET(INC_DIRS
+	"${CMAKE_CURRENT_SOURCE_DIR}"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	"${CMAKE_CURRENT_SOURCE_DIR}/external"
+	"${CMAKE_CURRENT_SOURCE_DIR}/external/mongoose"
+)
+
+set(LIB_FILES
+        "mongoose"
+        "pthread")
+
+if(OPENSSL_FOUND)
+	list(APPEND INC_DIRS ${OPENSSL_INCLUDE_DIR})
+        list(APPEND LIB_FILES ${OPENSSL_LIBRARIES})
+else()
 	ExternalProject_Add(libressl
 		SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/libressl"
 		CMAKE_ARGS -DENABLE_ASM=OFF -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}
 		INSTALL_DIR "${CMAKE_BINARY_DIR}"
 	)
+	list(APPEND INC_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/external/libressl/include")
+        list(APPEND LIB_FILES "ssl" "crypto")
 endif()
 
 add_library(mongoose STATIC
@@ -34,21 +54,40 @@ add_library(mongoose STATIC
 	"external/mongoose/mongoose.h"
 )
 
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/json-c" EXCLUDE_FROM_ALL)
+if (JSONC_LIBRARY)
+	list(APPEND LIB_FILES "${JSONC_LIBRARY}")
+else()
+	add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/json-c" EXCLUDE_FROM_ALL)
+	list(APPEND INC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/json-c")
+	list(APPEND LIB_FILES "json-c-static")
+endif()
 
-add_library(sqlite STATIC
-	"external/sqlite/sqlite3.c"
-	"external/sqlite/sqlite3.h"
-)
+if (SQLITE3_LIBRARY)
+	list(APPEND LIB_FILES "${SQLITE3_LIBRARY}")
+else()
+	add_library(sqlite3 STATIC
+		"external/sqlite/sqlite3.c"
+		"external/sqlite/sqlite3.h"
+	)
+	list(APPEND INC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/sqlite")
+	list(APPEND LIB_FILES "sqlite3")
+endif()
 
-add_library(fcgi STATIC
-	"external/libfcgi/libfcgi/fcgiapp.c"
-	"external/libfcgi/libfcgi/fcgi_stdio.c"
-	"external/libfcgi/libfcgi/os_unix.c"
-)
-target_include_directories(fcgi PUBLIC
-	"external/libfcgi/include"
-)
+if (LIBFCGI_LIBRARY)
+	 list(APPEND LIB_FILES "${LIBFCGI_LIBRARY}")
+else()
+	add_library(fcgi STATIC
+		"external/libfcgi/libfcgi/fcgiapp.c"
+		"external/libfcgi/libfcgi/fcgi_stdio.c"
+		"external/libfcgi/libfcgi/os_unix.c"
+	)
+
+	target_include_directories(fcgi PUBLIC
+		"external/libfcgi/include"
+	)
+        list(APPEND INC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/libfcgi/include")
+        list(APPEND LIB_FILES "fcgi")
+endif()
 
 bison_target(ConfigParser src/parse.y ${CMAKE_CURRENT_BINARY_DIR}/config_parser.y.c)
 flex_target(ConfigParser src/scan.l ${CMAKE_CURRENT_BINARY_DIR}/config_scanner.l.c)
@@ -121,30 +160,6 @@ if(LINUX)
 	)
 endif(LINUX)
 
-SET(INC_DIRS
-	"${CMAKE_CURRENT_SOURCE_DIR}"
-	"${CMAKE_CURRENT_SOURCE_DIR}/src"
-	"${CMAKE_CURRENT_SOURCE_DIR}/external/mongoose"
-	"${CMAKE_CURRENT_SOURCE_DIR}/external/json-c"
-	"${CMAKE_CURRENT_SOURCE_DIR}/external/libfcgi/include"
-	"${CMAKE_CURRENT_SOURCE_DIR}/external/sqlite"
-)
-
-set(LIB_FILES
-	"mongoose"
-	"json-c-static"
-	"fcgi"
-	"sqlite"
-	"pthread")
-
-if(OPENSSL_FOUND)
-	list(APPEND INC_DIRS ${OPENSSL_INCLUDE_DIR})
-	list(APPEND LIB_FILES ${OPENSSL_LIBRARIES})
-else()
-	list(APPEND INC_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/external/libressl/include")
-	list(APPEND LIB_FILES "ssl" "crypto")
-endif()
-
 if(LINUX)
 	list(APPEND LIB_FILES
 		"dl"
@@ -168,4 +183,3 @@ target_link_libraries(git-lfs-fcgi PUBLIC
 if(NOT OPENSSL_FOUND)
 	add_dependencies(git-lfs-fcgi libressl)
 endif()
-
