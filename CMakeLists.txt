@@ -28,8 +28,8 @@ link_directories("${CMAKE_BINARY_DIR}/lib")
 SET(INC_DIRS
 	"${CMAKE_CURRENT_SOURCE_DIR}"
 	"${CMAKE_CURRENT_SOURCE_DIR}/src"
-	"${CMAKE_CURRENT_SOURCE_DIR}/external"
-	"${CMAKE_CURRENT_SOURCE_DIR}/external/mongoose"
+	"${CMAKE_CURRENT_SOURCE_DIR}/external/mongoose",
+	"/usr/local/include"
 )
 
 set(LIB_FILES
