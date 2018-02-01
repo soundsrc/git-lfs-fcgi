@@ -1,4 +1,4 @@
-# Git LFS Server
+# Git LFS FastCGI Server
 
 *Warning: Not production ready*
 
