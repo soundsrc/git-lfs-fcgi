@@ -1,5 +1,5 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: git-lfs-server
+Upstream-Name: git-lfs-fcgi
 Source: <url://example.com>
 
 Files: *

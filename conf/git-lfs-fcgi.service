@@ -3,7 +3,7 @@ Description=Git LFS Server
 After=network.target auditd.service
 
 [Service]
-ExecStart=/usr/sbin/git-lfs-server
+ExecStart=/usr/sbin/git-lfs-fcgi
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=process
 Restart=on-failure

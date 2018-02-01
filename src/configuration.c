@@ -55,7 +55,7 @@ struct git_lfs_config *git_lfs_load_config(const char *path)
 	
 	if(!config->process_chroot)
 	{
-		config->process_chroot = strdup("/var/lib/git-lfs-server/run");
+		config->process_chroot = strdup("/var/lib/git-lfs-fcgi/run");
 	}
 
 	size_t chroot_path_len = 0;
@@ -86,7 +86,7 @@ struct git_lfs_config *git_lfs_load_config(const char *path)
 	
 	if(!config->fastcgi_socket)
 	{
-		config->fastcgi_socket = strdup("/var/lib/git-lfs-server/run/git-lfs-server.sock");
+		config->fastcgi_socket = strdup("/var/lib/git-lfs-fcgi/run/git-lfs-fcgi.sock");
 	}
 	
 	if(config->fastcgi_server && config->fastcgi_socket[0] != ':')

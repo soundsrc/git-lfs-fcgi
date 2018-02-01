@@ -1,0 +1,56 @@
+.TH man 8 "20 Jan 2018" "1.0" "git-lfs-fcgi man page"
+.SH NAME
+git-lfs-fcgi \- GIT LFS FastCGI Server
+
+.SH SYNOPSIS
+git-lfs-fcgi [--config=FILE]
+
+.SH DESCRIPTION
+git-lfs-fcgi is a FastCGI binary which implements the GIT LFS protocol.
+
+git-lfs-fcgi is best used when hosting GIT repo over HTTPS with an existing
+webserver. This allows a webserver to manage both the GIT repo and LFS server
+under one URL and allows for clients to seamlessly integrate with LFS support.
+git-lfs-fcgi can run standalone, but the support is not as good.
+
+A configuration file must be created and configured before use. By default,
+the server will serve nothing. See 
+.IR conf/git-lfs-fcgi.conf
+in the source as a starting point for setting up the configuration file.
+This file should be created and saved to
+.IR /etc/git-lfs-fcgi/git-lfs-fcgi.conf
+See
+.BR git-lfs-fcgi.conf (5)
+for futher details.
+
+git-lfs-fcgi should be initially run as the root user, but edit the configuration
+file to set an unprivileged user and chroot path. The server will drop its root unprivilege
+and optionally chroot to a path after it has fully started.
+
+.SH OPTIONS
+git-lfs-fcgi only takes one option. If no options are passed it will attempt to
+load the default configuration file.
+
+.IP --config=file
+Specifies the configuration file. The default is 
+.IR /etc/git-lfs-fcgi/git-lfs-fcgi.conf.
+
+.SH FILES
+.I /etc/git-lfs-fcgi/git-lfs-fcgi.conf
+.RS
+The default configuration file used by git-lfs-fcgi. This can be overridden by the
+--config option.
+See
+.BR git-lfs-fcgi.conf (5)
+for futher details.
+.RE
+.I /var/lib/git-lfs-fcgi/run/git-lfs-fcgi.sock
+.RS
+The FastCGI socket used by git-lfs-fcgi for communicating with the webserver.
+.RE
+
+.SH SEE ALSO
+git-lfs-fcgi.conf(5)
+
+.SH AUTHOR
+Sound <sound@sagaforce.com>

@@ -48,7 +48,7 @@ static void child_terminated(int sig)
 int main(int argc, char *argv[])
 {
 	int verbose = 0;
-	char config_path[4096] = "/etc/git-lfs-server/git-lfs-server.conf";
+	char config_path[4096] = "/etc/git-lfs-fcgi/git-lfs-fcgi.conf";
 
 	static struct option long_options[] =
 	{

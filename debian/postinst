@@ -1,5 +1,5 @@
 #!/bin/sh
-# postinst script for git-lfs-server
+# postinst script for git-lfs-fcgi
 #
 # see: dh_installdeb(1)
 
@@ -44,7 +44,7 @@ then
 fi
 
 # create folders
-install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-server
-install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-server/run
+install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-fcgi
+install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-fcgi/run
 
 exit 0

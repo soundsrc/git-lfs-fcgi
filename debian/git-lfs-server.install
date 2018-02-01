@@ -1,4 +1,4 @@
-conf/git-lfs-server.conf etc/git-lfs-server/
-conf/example-repo.conf etc/git-lfs-server/conf.d/
-conf/git-lfs-server.service etc/systemd/system/
-build/git-lfs-server usr/sbin/
+conf/git-lfs-fcgi.conf etc/git-lfs-fcgi/
+conf/example-repo.conf etc/git-lfs-fcgi/conf.d/
+conf/git-lfs-fcgi.service etc/systemd/system/
+build/git-lfs-fcgi usr/sbin/

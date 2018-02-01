@@ -1,4 +1,4 @@
-project(git-lfs-server)
+project(git-lfs-fcgi)
 
 cmake_minimum_required (VERSION 3.0.2)
 include(ExternalProject)
@@ -151,21 +151,21 @@ if(LINUX)
 	)
 endif()
 
-add_executable(git-lfs-server
+add_executable(git-lfs-fcgi
 	${SRC_FILES}
 	${BISON_ConfigParser_OUTPUTS} 
 	${FLEX_ConfigParser_OUTPUTS}
 )
 
-target_include_directories(git-lfs-server PUBLIC
+target_include_directories(git-lfs-fcgi PUBLIC
 	${INC_DIRS}
 )
 
-target_link_libraries(git-lfs-server PUBLIC
+target_link_libraries(git-lfs-fcgi PUBLIC
 	${LIB_FILES}
 )
 
 if(NOT OPENSSL_FOUND)
-	add_dependencies(git-lfs-server libressl)
+	add_dependencies(git-lfs-fcgi libressl)
 endif()
 

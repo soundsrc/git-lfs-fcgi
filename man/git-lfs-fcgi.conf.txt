@@ -1,13 +1,13 @@
-man(5)			 git-lfs-server.conf man page			man(5)
+man(5)			 git-lfs-fcgi.conf man page			man(5)
 
 
 
 NAME
-       git-lfs-server.conf - GIT LFS server configuration file
+       git-lfs-fcgi.conf - GIT LFS server configuration file
 
 
 DESCRIPTION
-       git-lfs-server.conf  is the main configuration file for git-lfs-server.
+       git-lfs-fcgi.conf  is the main configuration file for git-lfs-fcgi.
        It defines the global configuration values of the server as well as the
        configuration  to  one  or more GIT LFS repositories hosted on the same
        server.
@@ -18,18 +18,18 @@ FORMAT
        addition,  one  or  more  repository  blocks should be defined for each
        repository.
 
-       The default configuation file is  located  at  /etc/git-lfs-server/git-
+       The default configuation file is  located  at  /etc/git-lfs-fcgi/git-
        lfs-server.conf
 
        An example configuration may look like this:
 
 
 	      base_url "http://example.com"
-	      chroot_path "/var/lib/git-lfs-server"
+	      chroot_path "/var/lib/git-lfs-fcgi"
 	      repo "My Git Repo"
 	      {
 		   uri "/myrepo/info/lfs"
-		   root "/var/lib/git-lfs-server/myrepo"
+		   root "/var/lib/git-lfs-fcgi/myrepo"
 	      }
 
 
@@ -82,8 +82,8 @@ GLOBAL SETTINGS
 
        fastcgi_socket PATH
 	      Path to the unix domain socket to use for FastCGI communication.
-	      This  path  must	start  with  /var/lib/git-lfs-server/run.   By
-	      default,	this  is  set  to /var/lib/git-lfs-server/run/git-lfs-
+	      This  path  must	start  with  /var/lib/git-lfs-fcgi/run.   By
+	      default,	this  is  set  to /var/lib/git-lfs-fcgi/run/git-lfs-
 	      socket.sock It is not recommended to change this.
 
 
@@ -101,7 +101,7 @@ REPOSITORY SETTINGS
 	      repo "Name of Repo"
 	      {
 		   uri "/repo/info/lfs"
-		   root "/var/lib/git-lfs-server/repo"
+		   root "/var/lib/git-lfs-fcgi/repo"
 		   # other settings ...
 	      }
 
@@ -158,7 +158,7 @@ REPOSITORY SETTINGS
 
 
 SEE ALSO
-       git-lfs-server.conf(5)
+       git-lfs-fcgi.conf(5)
 
 
 AUTHOR

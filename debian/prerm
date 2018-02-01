@@ -1,5 +1,5 @@
 #!/bin/sh
-# prerm script for git-lfs-server
+# prerm script for git-lfs-fcgi
 #
 # see: dh_installdeb(1)
 
@@ -35,8 +35,8 @@ esac
 
 #DEBHELPER#
 
-systemctl stop git-lfs-server
-rmdir /var/lib/git-lfs-server/run > /dev/null 2>&1 || true
-rmdir /var/lib/git-lfs-server > /dev/null 2>&1 || true
+systemctl stop git-lfs-fcgi
+rmdir /var/lib/git-lfs-fcgi/run > /dev/null 2>&1 || true
+rmdir /var/lib/git-lfs-fcgi > /dev/null 2>&1 || true
 
 exit 0

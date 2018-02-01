@@ -35,11 +35,11 @@ sudo groupadd git-lfs
 sudo useradd git-lfs
 ```
 
-Also create the /var/lib/git-lfs-server/run directory and make them accessible by the git-lfs user.
+Also create the /var/lib/git-lfs-fcgi/run directory and make them accessible by the git-lfs user.
 
 ```
-sudo install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-server
-sudo install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-server/run
+sudo install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-fcgi
+sudo install -d -m 0755 -o git-lfs -g git-lfs /var/lib/git-lfs-fcgi/run
 ```
 
 
@@ -49,18 +49,18 @@ The GIT-LFS server requires a configuration file to operate.
 
 For example, if you run a GIT repository at https://git-server.com/foo/bar.git and you want to serve
 a LFS server on https://git-server.com/foo/bar.git/info/lfs and you want to store your LFS objects
-in the directory /var/lib/git-lfs-server/foo/bar.git/lfs.
+in the directory /var/lib/git-lfs-fcgi/foo/bar.git/lfs.
 
-Create a file at /etc/git-lfs-server/git-lfs-server.conf and the configuration might look like this:
+Create a file at /etc/git-lfs-fcgi/git-lfs-fcgi.conf and the configuration might look like this:
 
 
 ```
 base_url "https://git-server.com"
-chroot_path "/var/lib/git-lfs-server"
+chroot_path "/var/lib/git-lfs-fcgi"
 repo "Foobar Repository"
 {
 	uri "/foo/bar.git/info/lfs"
-	root "/var/lib/git-lfs-server/foo/bar.git/lfs"
+	root "/var/lib/git-lfs-fcgi/foo/bar.git/lfs"
 }
 ```
 
@@ -70,9 +70,9 @@ Man pages located in man/ fully document the configuration files.
 
 See:
 
-[git-lfs-server.conf (5)](man/git-lfs-server.conf.txt)
+[git-lfs-fcgi.conf (5)](man/git-lfs-fcgi.conf.txt)
 
-[git-lfs-server (8)](man/git-lfs-server.txt)
+[git-lfs-fcgi (8)](man/git-lfs-fcgi.txt)
 
 ## FastCGI configuration
 
@@ -83,7 +83,7 @@ Using the example of handling https://git-server.com/foo/bar.git/info/lfs,
 the webserver should now be configured to listen on the URI /foo/bar.git/info/lfs
 and have the request passed via FastCGI to the socket listening on
 
-/var/lib/git-lfs-server/run/git-lfs-server.sock
+/var/lib/git-lfs-fcgi/run/git-lfs-fcgi.sock
 
 Instructions for setting this up will vary depending on the webserver.
 
@@ -96,7 +96,7 @@ location /foo/bar.git/info/lfs {
 	client_max_body_size 0; # unlimited upload/download size
 	include /etc/nginx/fastcgi_param # might be different base on your disto
 	fastcgi_pass_request_headers on;
-	fastcgi_pass unix:/var/lib/git-lfs-server/run/git-lfs-server.sock
+	fastcgi_pass unix:/var/lib/git-lfs-fcgi/run/git-lfs-fcgi.sock
 }
 ```
 
@@ -111,14 +111,14 @@ the FastCGI socket must be located inside the webserver chroot.
 
 First, create a directory for the git-lfs socket:
 ```
-install -d -m 0711 -o git-lfs -g git-lfs /var/www/run/git-lfs-server
+install -d -m 0711 -o git-lfs -g git-lfs /var/www/run/git-lfs-fcgi
 ```
 
-In the global configuration /etc/git-lfs-server/git-lfs-server.conf, we should
+In the global configuration /etc/git-lfs-fcgi/git-lfs-fcgi.conf, we should
 define the process_chroot and fastcgi_socket option to point to within the /var/www/ chroot:
 ```
-process_chroot "/var/www/run/git-lfs-server"
-fastcgi_socket "/var/www/run/git-lfs-server/git-lfs-server.sock"
+process_chroot "/var/www/run/git-lfs-fcgi"
+fastcgi_socket "/var/www/run/git-lfs-fcgi/git-lfs-fcgi.sock"
 ```
 
 Finally, we can adjust our /etc/httpd.conf to something like this:
@@ -130,7 +130,7 @@ server "example.com" {
 		connection {
 			max request body 1073741824 # set to any limit
 		}
-		fastcgi socket "/run/git-lfs-server/git-lfs-server.sock"
+		fastcgi socket "/run/git-lfs-fcgi/git-lfs-fcgi.sock"
 	}
 }
 ```
@@ -139,7 +139,7 @@ server "example.com" {
 
 Pre-running checklist.
 
-1) Make sure /etc/git-lfs-server/git-lfs-server.conf is setup
+1) Make sure /etc/git-lfs-fcgi/git-lfs-fcgi.conf is setup
 
 2) Make sure the base_url in the global configuration is properly set. If incorrectly set, this
 may result in upload / download failures.
@@ -149,20 +149,20 @@ may result in upload / download failures.
 4) Run the git-lfs FastCGI server
 
 ```
-./git-lfs-server
+./git-lfs-fcgi
 ```
 
-By default, git-lfs-server runs in the foreground but you can use the shell & to background the process.
+By default, git-lfs-fcgi runs in the foreground but you can use the shell & to background the process.
 
 ```
-./git-lfs-server &
+./git-lfs-fcgi &
 ```
 
-On systemd systems, there is a conf/git-lfs-server.service file which you can copy into your /etc/systemd/system folder.
+On systemd systems, there is a conf/git-lfs-fcgi.service file which you can copy into your /etc/systemd/system folder.
 Then you can start the server systemd style:
 
 ```
-systemctl git-lfs-server start
+systemctl git-lfs-fcgi start
 ```
 
 
@@ -185,11 +185,11 @@ Git LFS repository objects are stored at the path defined by the "root" configur
 Each object is categorized into folders based on the object id (SHA256), with the first 2 characters of the object id
 as the folder name.
 
-Example layout (if "root" is set to /var/lib/git-lfs-server/foo/bar.git/lfs):
+Example layout (if "root" is set to /var/lib/git-lfs-fcgi/foo/bar.git/lfs):
 
 	/var
 	  /lib
-	    /git-lfs-server
+	    /git-lfs-fcgi
 	      /foo
 	        /bar.git
 	          /lfs

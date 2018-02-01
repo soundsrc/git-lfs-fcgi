@@ -1,9 +1,9 @@
-.TH man 5 "20 Jan 2018" "1.0" "git-lfs-server.conf man page"
+.TH man 5 "20 Jan 2018" "1.0" "git-lfs-fcgi.conf man page"
 .SH NAME
-git-lfs-server.conf \- GIT LFS server configuration file
+git-lfs-fcgi.conf \- GIT LFS server configuration file
 
 .SH DESCRIPTION
-git-lfs-server.conf is the main configuration file for git-lfs-server.
+git-lfs-fcgi.conf is the main configuration file for git-lfs-fcgi.
 It defines the global configuration values of the server as well as the
 configuration to one or more GIT LFS repositories hosted on the same
 server.
@@ -14,7 +14,7 @@ In addition, one or more repository blocks should be defined for
 each repository.
 
 The default configuation file is located at
-.IR /etc/git-lfs-server/git-lfs-server.conf
+.IR /etc/git-lfs-fcgi/git-lfs-fcgi.conf
 
 An example configuration may look like this:
 
@@ -22,11 +22,11 @@ An example configuration may look like this:
 .nf
 .RS
 base_url "http://example.com"
-chroot_path "/var/lib/git-lfs-server"
+chroot_path "/var/lib/git-lfs-fcgi"
 repo "My Git Repo"
 {
 	uri "/myrepo/info/lfs"
-	root "/var/lib/git-lfs-server/myrepo"
+	root "/var/lib/git-lfs-fcgi/myrepo"
 }
 .RE
 .fi
@@ -64,8 +64,8 @@ The port number to use to listen when not running in FastCGI mode.
 
 .IP "fastcgi_socket PATH"
 Path to the unix domain socket to use for FastCGI communication. 
-This path must start with /var/lib/git-lfs-server/run. By default, this is set to 
-.I /var/lib/git-lfs-server/run/git-lfs-socket.sock
+This path must start with /var/lib/git-lfs-fcgi/run. By default, this is set to 
+.I /var/lib/git-lfs-fcgi/run/git-lfs-socket.sock
 It is not recommended to change this.
 
 .IP "include PATH"
@@ -82,7 +82,7 @@ is defined using the repo block. The repo block looks like:
 repo "Name of Repo"
 {
 	uri "/repo/info/lfs"
-	root "/var/lib/git-lfs-server/repo"
+	root "/var/lib/git-lfs-fcgi/repo"
 	# other settings ...
 }
 .RE
@@ -128,7 +128,7 @@ credentials for users to access this repository. The passwd	file is created usin
 utility from Apache and only supports bcrypt passwords storage only.
 
 .SH SEE ALSO
-git-lfs-server.conf(5)
+git-lfs-fcgi.conf(5)
 
 .SH AUTHOR
 Sound <sound@sagaforce.com>
