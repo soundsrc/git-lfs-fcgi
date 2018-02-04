@@ -339,7 +339,7 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr,
 					char url[1024];
 
 					// add upload url
-					if(snprintf(url, sizeof(url), "%s/%s/upload/%s", config->base_url, repo->uri, oid_str) >= (long)sizeof(url))
+					if(snprintf(url, sizeof(url), "%s/%s/upload/%s", repo->base_url ? repo->base_url : config->base_url, repo->uri, oid_str) >= (long)sizeof(url))
 					{
 						struct json_object *error = create_json_error(400, "Upload URL is too long.");
 						JSON_OBJECT_CHECK(error, error1);
@@ -389,7 +389,7 @@ static void git_lfs_server_handle_batch(struct repo_manager *mgr,
 				
 				char download_url[1024];
 				
-				if(snprintf(download_url, sizeof(download_url), "%s/%s/download/%s", config->base_url, repo->uri, oid_str) >= (long)sizeof(download_url))
+				if(snprintf(download_url, sizeof(download_url), "%s/%s/download/%s", repo->base_url ? repo->base_url : config->base_url, repo->uri, oid_str) >= (long)sizeof(download_url))
 				{
 					struct json_object *error = create_json_error(400, "Download URL is too long.");
 					JSON_OBJECT_CHECK(error, error1);

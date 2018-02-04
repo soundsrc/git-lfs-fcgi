@@ -131,6 +131,7 @@ void git_lfs_free_config(struct git_lfs_config *config)
 		free(repo->uri);
 		free(repo->root_dir);
 		free(repo->full_root_dir);
+		free(repo->base_url);
 		
 		free(repo);
 	}

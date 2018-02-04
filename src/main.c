@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
 			printf("Repo \"%s\"\n", repo->name);
 			printf("\tId: %d\n", repo->id);
 			printf("\tUri: %s\n", repo->uri);
-			printf("\tUrl: %s%s\n", config->base_url, repo->uri);
+			printf("\tUrl: %s%s\n", repo->base_url ? repo->base_url : config->base_url, repo->uri);
 			printf("\tRoot path: %s%s\n", config->chroot_path != NULL ? config->chroot_path : "", repo->root_dir);
 			printf("\tAuthentication: %s\n", repo->enable_authentication ? "yes" : "no");
 			printf("\tUpload verification: %s\n", repo->verify_uploads ? "yes" : "no");

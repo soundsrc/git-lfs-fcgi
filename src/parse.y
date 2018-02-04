@@ -150,7 +150,15 @@ repo_params_list
  	;
 
 repo_param
- 	: ROOT STRING {
+	: BASE_URL STRING {
+		parse_repo->base_url = strndup($1, sizeof($2));
+		if(!parse_repo->base_url)
+		{
+			yyerror("Parser ran out of memory");
+			YYERROR;
+		}
+	}
+	| ROOT STRING {
 		parse_repo->full_root_dir = strndup($2, sizeof($2));
 		if(!parse_repo->full_root_dir)
 		{

@@ -30,6 +30,7 @@ struct git_lfs_repo
 	SLIST_ENTRY(git_lfs_repo) entries;
 
 	uint32_t id; // unique repo id
+	char *base_url; // base url
 	char *name; // name of repo
 	char *uri; // uri
 	char *full_root_dir; // full path to the root_dir

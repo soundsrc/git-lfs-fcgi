@@ -110,6 +110,10 @@ should also have write access to the "git-lfs" user, or whichever user was defin
 global configuration. IMPORTANT: if the chroot_path was defined in the global configuration,
 then this directory must also start with the chroot_path.
 
+.IP "base_url URL"
+Optional. This can be used to override the global base_url setting for this repository.
+May be useful when running virtual domains on a single server.
+
 .IP "enable_authentication [yes|no]"
 This option is only necessary to enable built-in authentication when running as a standalone
 server. When running as a FastCGI binary, it's better to let your webserver handle the 
