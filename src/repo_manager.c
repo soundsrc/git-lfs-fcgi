@@ -625,7 +625,7 @@ static sqlite3 *open_or_create_locks_db(struct git_lfs_repo *repo)
 	return db;
 error:
 	sqlite3_close(db);
-	return -1;
+	return NULL;
 }
 
 static int handle_cmd_create_lock(struct repo_manager *mgr, const char *access_token, uint32_t cookie, const struct git_lfs_config *config)
