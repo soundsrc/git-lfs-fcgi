@@ -68,7 +68,8 @@ static struct git_lfs_access_token *git_lfs_add_access_token(const struct git_lf
 	// find existing access token
 	LIST_FOREACH(access_token, &access_token_list, entries)
 	{
-		if(expires_at < access_token->expire)
+		if(access_token->repo == repo &&
+		   expires_at < access_token->expire)
 		{
 			return access_token;
 		}
