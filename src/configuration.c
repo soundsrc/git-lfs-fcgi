@@ -29,7 +29,7 @@ struct git_lfs_config *git_lfs_load_config(const char *path)
 
 	config->fastcgi_server = 1;
 	config->port = 80;
-	config->num_threads = 2;
+	config->num_threads = 10;
 
 	SLIST_INIT(&config->repos);
 
