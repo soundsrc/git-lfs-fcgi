@@ -94,6 +94,7 @@ In your server configuration, you might add a location block that looks like thi
 ```
 location /foo/bar.git/info/lfs {
 	client_max_body_size 0; # unlimited upload/download size
+	fastcgi_keep_conn on;
 	include /etc/nginx/fastcgi_param # might be different base on your disto
 	fastcgi_pass_request_headers on;
 	fastcgi_pass unix:/var/lib/git-lfs-fcgi/run/git-lfs-fcgi.sock
