@@ -18,6 +18,7 @@
 #define COMPAT_STRING_H
 
 #include <stddef.h>
+#include <string.h>
 
 #if !defined(__FreeBSD__) && \
 	!defined(__OpenBSD__) && \
@@ -25,11 +26,12 @@
 
 size_t strlcat(char *dst, const char *src, size_t dsize);
 size_t strlcpy(char *dst, const char *src, size_t dsize);
+
+#if !defined(__linux__)
 char *strsep(char **stringp, const char *delim);
 char *strndup(const char *str, size_t maxlen);
+#endif
 
-#else
-#include <string.h>
 #endif
 
 #if !defined(__OpenBSD__)
