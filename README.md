@@ -30,16 +30,25 @@ Install the following dependancies:
  * openssl
 
 On Debian, you can use apt to install the dependancies:
-
 ```
 apt install cmake bison flex libssl-dev libfcgi-dev libsqlite3-dev libjson-c-dev
 ```
 
-CMake is required for the build.
+Create a build directory:
+```
+mkdir builddir
+cd builddir
 
 ```
-cmake
-make
+
+Run cmake to generate the build files (replacing the path below to the root of the source code):
+```
+cmake path/to/git-lfs-fcgi
+```
+
+Build the code:
+```
+cmake --build .
 ```
 
 For the first time, you must create the "git-lfs" user and group.
