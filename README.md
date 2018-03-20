@@ -12,12 +12,13 @@ that should interface with most webservers after a bit of configuration.
 
 * Test suite
 
-## Bugs
+## Limitations
 
 This server does not read information about the git repositories that it serves.
-Therefore it is very permissive with file locking. There is no permission
-enforcements on who or what files can be locked and files that don't exists can
-be locked as well.
+Therefore it has no concept of user permissions on the actual repositories nor 
+does it know the contents of a repository. This generally affects things such as
+file locking, where anyone with repostory access can freely lock any files including
+ones that don't exist!
 
 ## Building from source
 
