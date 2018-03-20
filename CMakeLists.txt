@@ -183,3 +183,8 @@ target_link_libraries(git-lfs-fcgi PUBLIC
 if(NOT OPENSSL_FOUND)
 	add_dependencies(git-lfs-fcgi libressl)
 endif()
+
+install(TARGETS git-lfs-fcgi RUNTIME DESTINATION sbin)
+install(FILES conf/git-lfs-fcgi.conf DESTINATION etc/git-lfs-fcgi)
+install(FILES conf/example-repo.conf DESTINATION etc/git-lfs-fcgi/conf.d)
+
