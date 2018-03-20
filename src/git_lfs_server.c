@@ -524,6 +524,7 @@ static void git_lfs_upload(struct repo_manager *mgr,
 
 	io->write_http_status(io->context, 200, "OK");
 	io->write_headers(io->context, NULL, 0);
+	io->flush(io->context);
 }
 
 struct json_object *git_lfs_lock_info_to_json(struct repo_lock_info *lock_info)
