@@ -342,16 +342,18 @@ static void *fastcgi_handler_thread(void *data)
 		io.flush = io_fcgi_flush;
 		
 		const char *request_method = FCGX_GetParam("REQUEST_METHOD", request.envp);
-		const char *document_uri = FCGX_GetParam("DOCUMENT_URI", request.envp);
+		const char *script_name = FCGX_GetParam("SCRIPT_NAME", request.envp);
 		const char *authentication = FCGX_GetParam("HTTP_AUTHORIZATION", request.envp);
 		const char *query_string = FCGX_GetParam("QUERY_STRING", request.envp);
-
-		if(!request_method || !document_uri || !query_string) {
+		
+		if(!request_method || !script_name || !query_string)
+		{
 			git_lfs_write_error(&io, 500, "FCGI error.");
-			continue;
 		}
-
-		handle_request(info, &io, authentication, request_method, document_uri, query_string);
+		else
+		{
+			handle_request(info, &io, authentication, request_method, script_name, query_string);
+		}
 
 		FCGX_Finish_r(&request);
 	}
