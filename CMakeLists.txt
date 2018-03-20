@@ -185,6 +185,6 @@ if(NOT OPENSSL_FOUND)
 endif()
 
 install(TARGETS git-lfs-fcgi RUNTIME DESTINATION sbin)
-install(FILES conf/git-lfs-fcgi.conf DESTINATION etc/git-lfs-fcgi)
-install(FILES conf/example-repo.conf DESTINATION etc/git-lfs-fcgi/conf.d)
+install(FILES conf/git-lfs-fcgi.conf DESTINATION /etc/git-lfs-fcgi)
+install(FILES conf/example-repo.conf DESTINATION /etc/git-lfs-fcgi/conf.d)
 
