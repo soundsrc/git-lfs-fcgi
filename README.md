@@ -21,6 +21,20 @@ be locked as well.
 
 ## Building from source
 
+Install the following dependancies:
+ * cmake
+ * bison/flex
+ * libfcgi
+ * json-c
+ * sqlite3
+ * openssl
+
+On Debian, you can use apt to install the dependancies:
+
+```
+apt install cmake bison flex libssl-dev libfcgi-dev libsqlite3-dev libjson-c-dev
+```
+
 CMake is required for the build.
 
 ```
