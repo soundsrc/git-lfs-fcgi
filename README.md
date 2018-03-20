@@ -127,7 +127,31 @@ location /foo/bar.git/info/lfs {
 
 ### Apache
 
-TODO
+For Apache (v2.4+), edit the httpd.conf configuration file to load the proxy and proxy_fcgi module.
+
+```
+LoadModule proxy_module modules/mod_proxy.so
+LoadModule proxy_fcgi_module modules/mod_proxy_fcgi.so
+```
+
+On a Debian-like system, instead of changing the httpd.conf directly, you can enable this by:
+
+```
+cd /etc/apache2/mods-enabled
+ln -s ../mods-available/proxy.load .
+ln -s ../mods-available/proxy_fcgi.load .
+```
+
+Edit your vhost configuration to include:
+```
+<VirtualHost *:80>
+ 	# etc...
+
+	ProxyPass "/foo/bar.git/info/lfs/" "unix:/var/lib/git-lfs-fcgi/run/git-lfs-fcgi.sock|fcgi://localhost/" enablereuse=on
+
+</VirtualHost>
+
+```
 
 ### OpenBSD httpd
 
