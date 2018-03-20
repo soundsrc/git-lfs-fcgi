@@ -39,7 +39,6 @@ Create a build directory:
 ```
 mkdir builddir
 cd builddir
-
 ```
 
 Run cmake to generate the build files (replacing the path below to the root of the source code):
@@ -76,7 +75,6 @@ a LFS server on https://git-server.com/foo/bar.git/info/lfs and you want to stor
 in the directory /var/lib/git-lfs-fcgi/foo/bar.git/lfs.
 
 Create a file at /etc/git-lfs-fcgi/git-lfs-fcgi.conf and the configuration might look like this:
-
 
 ```
 base_url "https://git-server.com"
