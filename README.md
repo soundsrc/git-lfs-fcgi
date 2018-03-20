@@ -117,7 +117,7 @@ In your server configuration, you might add a location block that looks like thi
 location /foo/bar.git/info/lfs {
 	client_max_body_size 0; # unlimited upload/download size
 	fastcgi_keep_conn on;
-	include /etc/nginx/fastcgi_param # might be different base on your disto
+	include /etc/nginx/fastcgi_param # might be different based on your disto
 	fastcgi_pass_request_headers on;
 	fastcgi_pass unix:/var/lib/git-lfs-fcgi/run/git-lfs-fcgi.sock
 }
@@ -196,13 +196,13 @@ may result in upload / download failures.
 4) Run the git-lfs FastCGI server
 
 ```
-./git-lfs-fcgi
+sudo /path/to/git-lfs-fcgi
 ```
 
 By default, git-lfs-fcgi runs in the foreground but you can use the shell & to background the process.
 
 ```
-./git-lfs-fcgi &
+sudo /path/to/git-lfs-fcgi &
 ```
 
 On systemd systems, there is a conf/git-lfs-fcgi.service file which you can copy into your /etc/systemd/system folder.
