@@ -29,10 +29,11 @@ Install the following dependancies:
  * json-c
  * sqlite3
  * openssl
+ * zlib
 
 On Debian, you can use apt to install the dependancies:
 ```
-apt install cmake bison flex libssl-dev libfcgi-dev libsqlite3-dev libjson-c-dev
+apt install cmake bison flex libssl-dev libfcgi-dev libsqlite3-dev libjson-c-dev libz-dev
 ```
 
 Create a build directory:
