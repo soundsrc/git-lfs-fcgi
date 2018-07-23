@@ -6,6 +6,7 @@ include(FindOpenSSL)
 
 find_package(BISON)
 find_package(FLEX)
+find_package(ZLIB REQUIRED)
 
 find_library(SQLITE3_LIBRARY NAMES sqlite3 libsqlite3)
 find_library(LIBFCGI_LIBRARY NAMES fcgi libfcgi)
@@ -28,13 +29,15 @@ link_directories("${CMAKE_BINARY_DIR}/lib")
 SET(INC_DIRS
 	"${CMAKE_CURRENT_SOURCE_DIR}"
 	"${CMAKE_CURRENT_SOURCE_DIR}/src"
-	"${CMAKE_CURRENT_SOURCE_DIR}/external/mongoose",
+	"${CMAKE_CURRENT_SOURCE_DIR}/external/mongoose"
+	"${ZLIB_INCLUDE_DIRS}"
 	"/usr/local/include"
 )
 
 set(LIB_FILES
         "mongoose"
-        "pthread")
+        "pthread"
+        "${ZLIB_LIBRARIES}")
 
 if(OPENSSL_FOUND)
 	list(APPEND INC_DIRS ${OPENSSL_INCLUDE_DIR})

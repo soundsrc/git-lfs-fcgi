@@ -19,6 +19,8 @@
 #include <string.h>
 #include <stdarg.h>
 #include <time.h>
+#include <zlib.h>
+#include <assert.h>
 #include <openssl/sha.h>
 #include "sqlite3.h"
 #include "compat/string.h"
@@ -384,17 +386,33 @@ static int handle_cmd_check_oid(struct repo_manager *mgr, uint32_t cookie, const
 
 static int handle_cmd_get_oid(struct repo_manager *mgr, uint32_t cookie, const char *path, const char *oid_str)
 {
+	int fd;
 	struct repo_cmd_get_oid_response resp;
 	memset(&resp, 0, sizeof(resp));
-	
-	int fd = os_open_read(path);
+
+	char z_path[PATH_MAX];
+	if (snprintf(z_path, sizeof(z_path), "%s.z", path) >= sizeof(z_path))
+	{
+		git_lfs_repo_send_error_response(mgr, cookie, "Path length error.");
+		return 0;
+	}
+
+	if (os_file_exists(z_path))
+	{
+		fd = os_open_read(z_path);
+		resp.content_length = os_file_size(z_path);
+		resp.compressed = 1;
+	}
+	else
+	{
+		fd = os_open_read(path);
+		resp.content_length = os_file_size(path);
+	}
 	if(fd < 0)
 	{
 		git_lfs_repo_send_error_response(mgr, cookie, "Object %s does not exist.", oid_str);
 		return 0;
 	}
-	
-	resp.content_length = os_file_size(path);
 	
 	if(git_lfs_repo_send_response(mgr, REPO_CMD_GET_OID, cookie, &resp, sizeof(resp), &fd) < 0)
 	{
@@ -563,8 +581,116 @@ static int handle_cmd_commit(struct repo_manager *mgr, const char *access_token,
 			goto done;
 		}
 	}
-	
-	if(os_rename(upload->tmp_path, dest_path) < 0)
+
+	// for compression to take place, the compress option must be set and
+	// the file size must meet the minimum file size
+	long file_size = os_file_size(upload->tmp_path);
+	if (upload->repo->compress &&
+		file_size >= upload->repo->compress_min_size)
+	{
+		char z_tmp_path[PATH_MAX];
+		int srcfd, destfd;
+		z_stream strm;
+		int flush;
+		int ret, err = 1;
+
+		if(snprintf(z_tmp_path, sizeof(z_tmp_path), "%s/tmp/XXXXXX", upload->repo->root_dir) >= sizeof(z_tmp_path))
+		{
+			git_lfs_repo_send_error_response(mgr, cookie, "Temp path is too long.");
+			goto z_err0;
+		}
+
+		srcfd = os_open_read(upload->tmp_path);
+		if (srcfd < 0)
+		{
+			git_lfs_repo_send_error_response(mgr, cookie, "Failed to source file for compression.");
+			goto z_err0;
+		}
+
+		destfd = os_mkstemp(z_tmp_path);
+		if (destfd < 0)
+		{
+			git_lfs_repo_send_error_response(mgr, cookie, "Failed to create tmp file.");
+			goto z_err1;
+		}
+
+		memset(&strm, 0, sizeof(strm));
+		if (Z_OK != deflateInit(&strm, Z_BEST_COMPRESSION))
+		{
+			git_lfs_repo_send_error_response(mgr, cookie, "Failed to initialize deflate.");
+			goto z_err2;
+		}
+
+		unsigned char inBuf[131072];
+		unsigned char outBuf[131072];
+
+		do
+		{
+			int readBytes = os_read(srcfd, inBuf, sizeof(inBuf));
+			flush = readBytes < 0 ? Z_FINISH : Z_NO_FLUSH;
+			if (readBytes >= 0)
+				strm.avail_in = (uInt)readBytes;
+			else
+				strm.avail_in = 0;
+
+			strm.next_in = inBuf;
+
+			do
+			{
+				strm.next_out = sizeof(outBuf);
+				strm.next_out = outBuf;
+
+				ret = deflate(&strm, flush);
+				if (ret == Z_STREAM_ERROR)
+				{
+					git_lfs_repo_send_error_response(mgr, cookie, "deflate() error.");
+					goto z_err3;
+				}
+
+				if (os_write(destfd, outBuf, sizeof(outBuf) - strm.avail_out) < 0)
+				{
+					git_lfs_repo_send_error_response(mgr, cookie, "Error writing compressed file.");
+					goto z_err3;
+				}
+			} while(strm.avail_out == 0);
+			 assert(strm.avail_in == 0);
+		} while(flush != Z_FINISH);
+		assert(ret == Z_STREAM_END);
+
+		err = 0;
+z_err3:
+		deflateEnd(&strm);
+z_err2:
+		os_close(destfd);
+
+		if (!err)
+		{
+			// compress file must meet the ratio requirement
+			long compressed_file_size = os_file_size(z_tmp_path);
+			if ((compressed_file_size * 100 / file_size) <= (100 - upload->repo->compress_min_ratio))
+			{
+				if (strlcat(dest_path, ".z", sizeof(dest_path)) >= sizeof(dest_path))
+				{
+					git_lfs_repo_send_error_response(mgr, cookie, "Object %s could not be created. Path too long.", oid_str);
+					err = 1;
+				}
+
+				if (!err && os_rename(z_tmp_path, upload->tmp_path) < 0)
+				{
+					git_lfs_repo_send_error_response(mgr, cookie, "Object %s failed rename.", oid_str);
+					err = 1;
+				}
+			}
+		}
+
+		os_unlink(z_tmp_path);
+z_err1:
+		os_close(srcfd);
+z_err0:
+		if (err) goto done;
+	}
+
+	if (os_rename(upload->tmp_path, dest_path) < 0)
 	{
 		git_lfs_repo_send_error_response(mgr, cookie, "Object %s failed rename.", oid_str);
 		goto done;
@@ -1304,6 +1430,7 @@ int git_lfs_repo_get_read_oid_fd(struct repo_manager *mgr,
 								 unsigned char oid[32],
 								 int *fd,
 								 long *size,
+								 int *compressed,
 								 char *error_msg,
 								 size_t error_msg_buf_len)
 {
@@ -1330,6 +1457,7 @@ int git_lfs_repo_get_read_oid_fd(struct repo_manager *mgr,
 	}
 
 	*size = response.content_length;
+	*compressed = response.compressed;
 	
 	return 0;
 }

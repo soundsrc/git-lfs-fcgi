@@ -40,6 +40,9 @@ extern int yyerror (const char *msg, ...);
 %token NUM_THREADS
 %token CHROOT_PATH
 %token PROCESS_CHROOT
+%token COMPRESS
+%token COMPRESS_MIN_RATIO
+%token COMPRESS_MIN_SIZE
 %token USER
 %token GROUP
 %token FASTCGI_SOCKET
@@ -137,6 +140,9 @@ repo_declaration
 		parse_repo->name = strndup($2, sizeof($2));
 		parse_repo->id = s_next_id++;
 		parse_repo->verify_uploads = 1;
+		parse_repo->compress = 0;
+		parse_repo->compress_min_ratio = 3;
+		parse_repo->compress_min_size = 4096;
 	}
 	'{' repo_params_list '}' {
 		SLIST_INSERT_HEAD(&parse_config->repos, parse_repo, entries);
@@ -185,6 +191,26 @@ repo_param
 	}
 	| ENABLE_AUTHENTICATION NO {
 		parse_repo->enable_authentication = 0;
+	}
+	| COMPRESS YES {
+		parse_repo->compress = 1;
+	}
+	| COMPRESS NO {
+		parse_repo->compress = 0;
+	}
+	| COMPRESS_MIN_RATIO INTEGER {
+		if ($2 < 0 || $2 > 100)
+		{
+			yyerror("compress_min_ratio must be between 0-100.");
+			YYERROR;
+		}
+		else
+		{
+			parse_repo->compress_min_ratio = $2;
+		}
+	}
+	| COMPRESS_MIN_SIZE INTEGER {
+		parse_repo->compress_min_size = $2;
 	}
 	| AUTH_REALM STRING {
 		parse_repo->auth_realm = strndup($2, sizeof($2));

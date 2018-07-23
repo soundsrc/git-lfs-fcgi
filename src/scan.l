@@ -116,6 +116,9 @@ user { return USER; }
 group { return GROUP; }
 chroot_path { return CHROOT_PATH; }
 process_chroot { return PROCESS_CHROOT; }
+compress { return COMPRESS; }
+compress_min_ratio { return COMPRESS_MIN_RATIO; }
+compress_min_size { return COMPRESS_MIN_SIZE; }
 
 enable_authentication { return ENABLE_AUTHENTICATION; }
 auth_realm { return AUTH_REALM; }

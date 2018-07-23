@@ -97,6 +97,7 @@ struct repo_cmd_check_oid_response
 struct repo_cmd_get_oid_response
 {
 	long content_length;
+	int compressed;
 };
 
 struct repo_cmd_put_oid_response
@@ -210,6 +211,7 @@ int git_lfs_repo_get_read_oid_fd(struct repo_manager *mgr,
 								 unsigned char oid[32],
 								 int *fd,
 								 long *size,
+								 int *compressed,
 								 char *error_msg,
 								 size_t error_msg_buf_len);
 

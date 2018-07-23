@@ -20,6 +20,8 @@
 #include <stdarg.h>
 #include <time.h>
 #include <errno.h>
+#include <assert.h>
+#include <zlib.h>
 #include <openssl/sha.h>
 #include <json-c/json.h>
 #include "compat/string.h"
@@ -442,30 +444,97 @@ static void git_lfs_download(struct repo_manager *mgr,
 	}
 
 	int fd;
+	int compressed;
 	long filesize;
 	char error_msg[128];
-	if(git_lfs_repo_get_read_oid_fd(mgr, config, repo, oid_bytes, &fd, &filesize, error_msg, sizeof(error_msg)) < 0) {
+	if(git_lfs_repo_get_read_oid_fd(mgr, config, repo, oid_bytes, &fd, &filesize, &compressed, error_msg, sizeof(error_msg)) < 0) {
 		git_lfs_write_error(io, 400, "%s", error_msg);
 		return;
 	}
 
-	char content_length[64];
-	snprintf(content_length, sizeof(content_length), "Content-Length: %ld", filesize);
-	const char *headers[] = {
-		"Content-Type: application/octet-stream",
-		content_length
-	};
+	if (compressed)
+	{
+		unsigned char inBuf[131072];
+		unsigned char outBuf[131072];
+		int n, ret;
+		z_stream strm;
+		memset(&strm, 0, sizeof(strm));
 
-	io->write_http_status(io->context, 200, "OK");
-	io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
+		if (Z_OK != inflateInit(&strm))
+		{
+			git_lfs_write_error(io, 400, "inflateInit(): error initializing.");
+			return;
+		}
 
-	char buffer[4096];
-	int n;
+		const char *headers[] = {
+			"Content-Type: application/octet-stream",
+			"Transfer-Encoding: chunked"
+		};
 
-	while(filesize > 0 &&
-		  (n = os_read(fd, buffer, sizeof(buffer) < filesize ? sizeof(buffer) : filesize)) > 0) {
-		io->write(io->context, buffer, n);
-		filesize -= n;
+		io->write_http_status(io->context, 200, "OK");
+		io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
+
+		do
+		{
+			n = os_read(fd, inBuf, sizeof(inBuf));
+			if (n < 0)
+			{
+				assert(0);
+				(void)inflateEnd(&strm);
+				return;
+			}
+			if (n == 0) break;
+
+			strm.next_in = inBuf;
+			strm.avail_in = n;
+			do
+			{
+				strm.avail_out = sizeof(outBuf);
+				strm.next_out = outBuf;
+
+				ret = inflate(&strm, Z_NO_FLUSH);
+				assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
+				switch (ret) {
+					case Z_NEED_DICT:
+						ret = Z_DATA_ERROR;     /* and fall through */
+					case Z_DATA_ERROR:
+					case Z_MEM_ERROR:
+						assert(0);
+						(void)inflateEnd(&strm);
+						return;
+				}
+
+				int have = sizeof(outBuf) - strm.avail_out;
+				io->printf(io->context, "%x\r\n", have);
+				io->write(io->context, outBuf, have);
+				io->write(io->context, "\r\n", 2);
+			} while (strm.avail_out == 0);
+
+		} while (ret != Z_STREAM_END);
+
+		io->write(io->context, "0\r\n\r\n", 5);
+		inflateEnd(&strm);
+	}
+	else
+	{
+		char content_length[64];
+		snprintf(content_length, sizeof(content_length), "Content-Length: %ld", filesize);
+		const char *headers[] = {
+			"Content-Type: application/octet-stream",
+			content_length
+		};
+
+		io->write_http_status(io->context, 200, "OK");
+		io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
+
+		char buffer[4096];
+		int n;
+
+		while(filesize > 0 &&
+			  (n = os_read(fd, buffer, sizeof(buffer) < filesize ? sizeof(buffer) : filesize)) > 0) {
+			io->write(io->context, buffer, n);
+			filesize -= n;
+		}
 	}
 	io->flush(io->context);
 

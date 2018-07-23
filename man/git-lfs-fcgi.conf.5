@@ -123,6 +123,23 @@ authentication.
 Whether uploaded files are verified by comparing the SHA256 with the file contents before saving it.
 Default is true.
 
+.IP "compress [yes|no]"
+Enables or disables compression. Uploaded files may be stored compressed to save some space. Default is false.
+
+.IP "compress_min_ratio RATIO"
+If compression is enabled, require the compressed file to be smaller than the original by specified ratio.
+Ratio is specified as an integer between 0 and 100. For example, if compress_min_ratio is 3 (default),
+then the compressed object must be atleast 3% smaller than the original object for it to be
+stored compressed.
+
+.IP "compress_min_size SIZE"
+If compression is enabled, the minimum size in bytes of an object before it may be stored compressed.
+Default is 4096 (4 KiB).
+
+.IP "verify_upload [yes|no]"
+Whether uploaded files are verified by comparing the SHA256 with the file contents before saving it.
+Default is true.
+
 .IP "auth_realm NAME"
 Authentication realm name. Optional.
 

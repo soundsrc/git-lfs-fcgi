@@ -37,6 +37,9 @@ struct git_lfs_repo
 	char *root_dir; // root directory for files, relative to chroot_path
 	int verify_uploads; // upload verification
 	int enable_authentication;
+	int compress;
+	int compress_min_ratio;
+	int compress_min_size;
 	char *auth_realm;
 	struct htpasswd *auth;
 };
