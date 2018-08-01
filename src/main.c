@@ -111,6 +111,13 @@ int main(int argc, char *argv[])
 			printf("\tRoot path: %s%s\n", config->chroot_path != NULL ? config->chroot_path : "", repo->root_dir);
 			printf("\tAuthentication: %s\n", repo->enable_authentication ? "yes" : "no");
 			printf("\tUpload verification: %s\n", repo->verify_uploads ? "yes" : "no");
+			printf("\tObject compression: %s\n", repo->compress_objects ? "yes" : "no");
+			printf("\tObject compression level: %d\n", repo->compress_level);
+			printf("\tObject compression min size: %d\n", repo->compress_min_size);
+			printf("\tObject compression min ratio: %d\n", repo->compress_min_ratio);
+			printf("\tHTTP gzip compression: %s\n", repo->http_gzip ? "yes" : "no");
+			printf("\tHTTP gzip compression level: %d\n", repo->http_gzip_level);
+			printf("\tHTTP gzip compression min size: %d\n", repo->http_gzip_min_size);
 			if(repo->auth_realm) printf("\tAuth Realm: %s\n", repo->auth_realm);
 			printf("\n");
 		}
