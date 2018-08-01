@@ -585,7 +585,7 @@ static int handle_cmd_commit(struct repo_manager *mgr, const char *access_token,
 	// for compression to take place, the compress option must be set and
 	// the file size must meet the minimum file size
 	long file_size = os_file_size(upload->tmp_path);
-	if (upload->repo->compress &&
+	if (upload->repo->compress_objects &&
 		file_size >= upload->repo->compress_min_size)
 	{
 		char z_tmp_path[PATH_MAX];
@@ -615,7 +615,7 @@ static int handle_cmd_commit(struct repo_manager *mgr, const char *access_token,
 		}
 
 		memset(&strm, 0, sizeof(strm));
-		if (Z_OK != deflateInit2(&strm, Z_BEST_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY))
+		if (Z_OK != deflateInit2(&strm, upload->repo->compress_level, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY))
 		{
 			git_lfs_repo_send_error_response(mgr, cookie, "Failed to initialize deflate.");
 			goto z_err2;

@@ -116,9 +116,13 @@ user { return USER; }
 group { return GROUP; }
 chroot_path { return CHROOT_PATH; }
 process_chroot { return PROCESS_CHROOT; }
-compress { return COMPRESS; }
+compress_objects { return COMPRESS_OBJECTS; }
 compress_min_ratio { return COMPRESS_MIN_RATIO; }
 compress_min_size { return COMPRESS_MIN_SIZE; }
+compress_level { return COMPRESS_LEVEL; }
+http_gzip { return HTTP_GZIP; }
+http_gzip_level { return HTTP_GZIP_LEVEL; }
+http_gzip_min_size { return HTTP_GZIP_MIN_SIZE; }
 
 enable_authentication { return ENABLE_AUTHENTICATION; }
 auth_realm { return AUTH_REALM; }

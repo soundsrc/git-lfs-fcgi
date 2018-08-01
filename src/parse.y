@@ -40,9 +40,13 @@ extern int yyerror (const char *msg, ...);
 %token NUM_THREADS
 %token CHROOT_PATH
 %token PROCESS_CHROOT
-%token COMPRESS
+%token COMPRESS_OBJECTS
 %token COMPRESS_MIN_RATIO
 %token COMPRESS_MIN_SIZE
+%token COMPRESS_LEVEL
+%token HTTP_GZIP
+%token HTTP_GZIP_LEVEL
+%token HTTP_GZIP_MIN_SIZE
 %token USER
 %token GROUP
 %token FASTCGI_SOCKET
@@ -140,9 +144,13 @@ repo_declaration
 		parse_repo->name = strndup($2, sizeof($2));
 		parse_repo->id = s_next_id++;
 		parse_repo->verify_uploads = 1;
-		parse_repo->compress = 0;
+		parse_repo->compress_objects = 0;
 		parse_repo->compress_min_ratio = 3;
 		parse_repo->compress_min_size = 4096;
+		parse_repo->compress_level = 9;
+		parse_repo->http_gzip = 0;
+		parse_repo->http_gzip_level = 1;
+		parse_repo->http_gzip_min_size = 1024;
 	}
 	'{' repo_params_list '}' {
 		SLIST_INSERT_HEAD(&parse_config->repos, parse_repo, entries);
@@ -192,11 +200,11 @@ repo_param
 	| ENABLE_AUTHENTICATION NO {
 		parse_repo->enable_authentication = 0;
 	}
-	| COMPRESS YES {
-		parse_repo->compress = 1;
+	| COMPRESS_OBJECTS YES {
+		parse_repo->compress_objects = 1;
 	}
-	| COMPRESS NO {
-		parse_repo->compress = 0;
+	| COMPRESS_OBJECTS NO {
+		parse_repo->compress_objects = 0;
 	}
 	| COMPRESS_MIN_RATIO INTEGER {
 		if ($2 < 0 || $2 > 100)
@@ -211,6 +219,37 @@ repo_param
 	}
 	| COMPRESS_MIN_SIZE INTEGER {
 		parse_repo->compress_min_size = $2;
+	}
+	| COMPRESS_LEVEL INTEGER {
+		if ($2 < 1 || $2 > 9)
+		{
+			yyerror("compress_level must be between 1-9.");
+			YYERROR;
+		}
+		else
+		{
+			parse_repo->compress_level = $2;
+		}
+	}
+	| HTTP_GZIP YES	{
+		parse_repo->http_gzip = 1;
+	}
+	| HTTP_GZIP NO {
+		parse_repo->http_gzip = 0;
+	}
+	| HTTP_GZIP_LEVEL INTEGER {
+		if ($2 < 1 || $2 > 9)
+		{
+			yyerror("http_gzip_level must be between 1-9.");
+			YYERROR;
+		}
+		else
+		{
+			parse_repo->http_gzip_level = $2;
+		}
+	}
+	| HTTP_GZIP_MIN_SIZE INTEGER {
+		parse_repo->http_gzip_min_size = $2;
 	}
 	| AUTH_REALM STRING {
 		parse_repo->auth_realm = strndup($2, sizeof($2));
