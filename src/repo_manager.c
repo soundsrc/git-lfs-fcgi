@@ -627,17 +627,19 @@ static int handle_cmd_commit(struct repo_manager *mgr, const char *access_token,
 		do
 		{
 			int readBytes = os_read(srcfd, inBuf, sizeof(inBuf));
-			flush = readBytes < 0 ? Z_FINISH : Z_NO_FLUSH;
-			if (readBytes >= 0)
-				strm.avail_in = (uInt)readBytes;
-			else
-				strm.avail_in = 0;
+			if (readBytes < 0)
+			{
+				git_lfs_repo_send_error_response(mgr, cookie, "Failed to read file.");
+				goto z_err3;
+			}
 
+			flush = readBytes == 0 ? Z_FINISH : Z_NO_FLUSH;
+			strm.avail_in = (uInt)readBytes;
 			strm.next_in = inBuf;
 
 			do
 			{
-				strm.next_out = sizeof(outBuf);
+				strm.avail_out = sizeof(outBuf);
 				strm.next_out = outBuf;
 
 				ret = deflate(&strm, flush);
