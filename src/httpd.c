@@ -43,6 +43,35 @@ static void term_handler(int sig)
 	os_mutex_unlock(running_mutex);
 }
 
+static int accepts_gzip_encoding(const char *accept_encoding)
+{
+	if (!accept_encoding)
+		return 0;
+
+	char accept_encoding_copy[1024];
+	if (strlcpy(accept_encoding_copy, accept_encoding, sizeof(accept_encoding_copy)) < sizeof(accept_encoding_copy))
+	{
+		char *p = accept_encoding_copy;
+		char *encoding_weight;
+		while((encoding_weight = strsep(&p, ",")))
+		{
+			char *q = encoding_weight;
+			char *encoding = strsep(&q, ";");
+			if (encoding)
+			{
+				while (*encoding && isspace(*encoding)) ++encoding;
+				if (0 == strncmp(encoding, "gzip", 4) &&
+					(0 == encoding[4] || isspace(encoding[4])))
+				{
+					return 1;
+				}
+			}
+		}
+	}
+
+	return 0;
+}
+
 static void fcgi_term_handler(int sig)
 {
 	FCGX_ShutdownPending();
@@ -311,8 +340,9 @@ static int httpd_handle_request(struct mg_connection *conn)
 	io.flush = io_mg_flush;
 	
 	const char *authentication = mg_get_header(conn, "Authorization");
+	const char *accept_encoding = mg_get_header(conn, "Accept-Encoding");
 
-	handle_request(info, &io, authentication, req->request_method, req->uri, req->query_string ? req->query_string : "", 0);
+	handle_request(info, &io, authentication, req->request_method, req->uri, req->query_string ? req->query_string : "", accepts_gzip_encoding(accept_encoding));
 	
 	return 1;
 }
@@ -348,31 +378,6 @@ static void *fastcgi_handler_thread(void *data)
 		const char *authentication = FCGX_GetParam("HTTP_AUTHORIZATION", request.envp);
 		const char *query_string = FCGX_GetParam("QUERY_STRING", request.envp);
 		const char *accept_encoding = FCGX_GetParam("HTTP_ACCEPT_ENCODING", request.envp);
-		int accepts_gzip = 0;
-		if (accept_encoding)
-		{
-			char accept_encoding_copy[1024];
-			if (strlcpy(accept_encoding_copy, accept_encoding, sizeof(accept_encoding_copy)) < sizeof(accept_encoding_copy))
-			{
-				char *p = accept_encoding_copy;
-				char *encoding_weight;
-				while((encoding_weight = strsep(&p, ",")))
-				{
-					char *q = encoding_weight;
-					char *encoding = strsep(&q, ";");
-					if (encoding)
-					{
-						while (*encoding && isspace(*encoding)) ++encoding;
-						if (0 == strncmp(encoding, "gzip", 4) &&
-							(0 == encoding[4] || isspace(encoding[4])))
-						{
-							accepts_gzip = 1;
-							break;
-						}
-					}
-				}
-			}
-		}
 		
 		if(!request_method || !script_name || !query_string)
 		{
@@ -380,7 +385,7 @@ static void *fastcgi_handler_thread(void *data)
 		}
 		else
 		{
-			handle_request(info, &io, authentication, request_method, script_name, query_string, accepts_gzip);
+			handle_request(info, &io, authentication, request_method, script_name, query_string, accepts_gzip_encoding(accept_encoding));
 		}
 
 		FCGX_Finish_r(&request);
