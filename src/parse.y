@@ -147,7 +147,7 @@ repo_declaration
 		parse_repo->compress_objects = 0;
 		parse_repo->compress_min_ratio = 3;
 		parse_repo->compress_min_size = 4096;
-		parse_repo->compress_level = 9;
+		parse_repo->compress_level = 5;
 		parse_repo->http_gzip = 0;
 		parse_repo->http_gzip_level = 1;
 		parse_repo->http_gzip_min_size = 4096;
