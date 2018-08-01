@@ -391,7 +391,7 @@ static int handle_cmd_get_oid(struct repo_manager *mgr, uint32_t cookie, const c
 	memset(&resp, 0, sizeof(resp));
 
 	char z_path[PATH_MAX];
-	if (snprintf(z_path, sizeof(z_path), "%s.z", path) >= sizeof(z_path))
+	if (snprintf(z_path, sizeof(z_path), "%s.gz", path) >= sizeof(z_path))
 	{
 		git_lfs_repo_send_error_response(mgr, cookie, "Path length error.");
 		return 0;
@@ -615,7 +615,7 @@ static int handle_cmd_commit(struct repo_manager *mgr, const char *access_token,
 		}
 
 		memset(&strm, 0, sizeof(strm));
-		if (Z_OK != deflateInit(&strm, Z_BEST_COMPRESSION))
+		if (Z_OK != deflateInit2(&strm, Z_BEST_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY))
 		{
 			git_lfs_repo_send_error_response(mgr, cookie, "Failed to initialize deflate.");
 			goto z_err2;
@@ -671,7 +671,7 @@ z_err2:
 			long compressed_file_size = os_file_size(z_tmp_path);
 			if ((compressed_file_size * 100 / file_size) <= (100 - upload->repo->compress_min_ratio))
 			{
-				if (strlcat(dest_path, ".z", sizeof(dest_path)) >= sizeof(dest_path))
+				if (strlcat(dest_path, ".gz", sizeof(dest_path)) >= sizeof(dest_path))
 				{
 					git_lfs_repo_send_error_response(mgr, cookie, "Object %s could not be created. Path too long.", oid_str);
 					err = 1;

@@ -460,7 +460,7 @@ static void git_lfs_download(struct repo_manager *mgr,
 		z_stream strm;
 		memset(&strm, 0, sizeof(strm));
 
-		if (Z_OK != inflateInit(&strm))
+		if (Z_OK != inflateInit2(&strm, 15 + 16))
 		{
 			git_lfs_write_error(io, 400, "inflateInit(): error initializing.");
 			return;
