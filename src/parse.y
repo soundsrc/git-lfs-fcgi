@@ -150,7 +150,7 @@ repo_declaration
 		parse_repo->compress_level = 9;
 		parse_repo->http_gzip = 0;
 		parse_repo->http_gzip_level = 1;
-		parse_repo->http_gzip_min_size = 1024;
+		parse_repo->http_gzip_min_size = 4096;
 	}
 	'{' repo_params_list '}' {
 		SLIST_INSERT_HEAD(&parse_config->repos, parse_repo, entries);

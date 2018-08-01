@@ -123,11 +123,11 @@ authentication.
 Whether uploaded files are verified by comparing the SHA256 with the file contents before saving it.
 Default is true.
 
-.IP "compress [yes|no]"
-Enables or disables compression. Uploaded files may be stored compressed to save some space. Default is false.
+.IP "compress_objects [yes|no]"
+Enables or disables object compression. Uploaded files may be stored gzip compressed to save disk space. Default is false.
 
 .IP "compress_min_ratio RATIO"
-If compression is enabled, require the compressed file to be smaller than the original by specified ratio.
+If compression is enabled, require the compressed file to be smaller than the original by the specified ratio.
 Ratio is specified as an integer between 0 and 100. For example, if compress_min_ratio is 3 (default),
 then the compressed object must be atleast 3% smaller than the original object for it to be
 stored compressed.
@@ -135,6 +135,20 @@ stored compressed.
 .IP "compress_min_size SIZE"
 If compression is enabled, the minimum size in bytes of an object before it may be stored compressed.
 Default is 4096 (4 KiB).
+
+.IP "compress_level LEVEL"
+Zlib compression level for stored objects. May be between 1-9, where 1 is fastest and 9 is best compression.
+
+.IP "http_gzip [yes|no]"
+Enables support for HTTP gzip compression. If using this option, ensure that your webserver's
+compression is turned off to avoid conflicts. When both http_gzip and compress_objects is on, 
+compressed objects may be served directly to the client avoiding server side compression.
+
+.IP "http_gzip_level LEVEL"
+Zlib compression level for realtime compression. May be a value between 1-9. Default is 1.
+
+.IP "http_gzip_min_size SIZE"
+Minimum size in bytes of a file before gzip compression is applied.
 
 .IP "verify_upload [yes|no]"
 Whether uploaded files are verified by comparing the SHA256 with the file contents before saving it.
