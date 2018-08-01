@@ -27,6 +27,7 @@ void git_lfs_server_handle_request(struct repo_manager *mgr,
 								   const struct git_lfs_repo *repo,
 								   struct socket_io *io,
 								   const char *authorization_header,
+								   int accepts_gzip,
 								   const char *method,
 								   const char *end_point,
 								   struct query_param_list *params);

@@ -434,7 +434,8 @@ static void git_lfs_download(struct repo_manager *mgr,
 							 const struct git_lfs_config *config,
 							 const struct git_lfs_repo *repo,
 							 const struct socket_io *io,
-							 const char *oid)
+							 const char *oid,
+							 int accepts_gzip)
 {
 	uint8_t oid_bytes[SHA256_DIGEST_LENGTH];
 	if(oid_from_string(oid, oid_bytes) < 0)
@@ -452,10 +453,11 @@ static void git_lfs_download(struct repo_manager *mgr,
 		return;
 	}
 
-	if (compressed)
+	unsigned char inBuf[131072];
+	unsigned char outBuf[131072];
+	// if object is compressed and server does not accept gzip, decompress it on the fly
+	if (compressed && !accepts_gzip)
 	{
-		unsigned char inBuf[131072];
-		unsigned char outBuf[131072];
 		int n, ret;
 		z_stream strm;
 		memset(&strm, 0, sizeof(strm));
@@ -479,9 +481,8 @@ static void git_lfs_download(struct repo_manager *mgr,
 			n = os_read(fd, inBuf, sizeof(inBuf));
 			if (n < 0)
 			{
-				assert(0);
-				(void)inflateEnd(&strm);
-				return;
+				assert(0 && "Read error from object.");
+				goto inflate_error;
 			}
 			if (n == 0) break;
 
@@ -499,9 +500,8 @@ static void git_lfs_download(struct repo_manager *mgr,
 						ret = Z_DATA_ERROR;     /* and fall through */
 					case Z_DATA_ERROR:
 					case Z_MEM_ERROR:
-						assert(0);
-						(void)inflateEnd(&strm);
-						return;
+						assert(0 && "Decompression error.");
+						goto inflate_error;
 				}
 
 				int have = sizeof(outBuf) - strm.avail_out;
@@ -511,29 +511,95 @@ static void git_lfs_download(struct repo_manager *mgr,
 			} while (strm.avail_out == 0);
 
 		} while (ret != Z_STREAM_END);
-
+inflate_error:
 		io->write(io->context, "0\r\n\r\n", 5);
 		inflateEnd(&strm);
 	}
 	else
 	{
-		char content_length[64];
-		snprintf(content_length, sizeof(content_length), "Content-Length: %ld", filesize);
-		const char *headers[] = {
-			"Content-Type: application/octet-stream",
-			content_length
-		};
+		// on the fly compression
+		if (accepts_gzip &&
+			repo->http_gzip &&
+			filesize >= repo->http_gzip_min_size &&
+			!compressed)
+		{
+			int ret, flush;
+			z_stream strm;
+			memset(&strm, 0, sizeof(strm));
 
-		io->write_http_status(io->context, 200, "OK");
-		io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
+			if (Z_OK != deflateInit2(&strm, repo->http_gzip_level, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY))
+			{
+				git_lfs_write_error(io, 400, "deflateInit2(): error initializing.");
+				return;
+			}
 
-		char buffer[4096];
-		int n;
+			const char *headers[] = {
+				"Content-Type: application/octet-stream",
+				"Transfer-Encoding: chunked",
+				"Content-Encoding: gzip"
+			};
 
-		while(filesize > 0 &&
-			  (n = os_read(fd, buffer, sizeof(buffer) < filesize ? sizeof(buffer) : filesize)) > 0) {
-			io->write(io->context, buffer, n);
-			filesize -= n;
+			io->write_http_status(io->context, 200, "OK");
+			io->write_headers(io->context, headers, sizeof(headers) / sizeof(headers[0]));
+
+			do {
+				int readBytes = os_read(fd, inBuf, sizeof(inBuf));
+				if (readBytes < 0)
+				{
+					assert(0 && "Read error.");
+					goto deflate_error;
+				}
+
+				flush = readBytes == 0 ? Z_FINISH : Z_NO_FLUSH;
+				strm.avail_in = (uInt)readBytes;
+				strm.next_in = inBuf;
+
+				do
+				{
+					strm.avail_out = sizeof(outBuf);
+					strm.next_out = outBuf;
+
+					ret = deflate(&strm, flush);
+					if (ret == Z_STREAM_ERROR)
+					{
+						assert(0 && "Deflate error.");
+						goto deflate_error;
+					}
+
+					int have = sizeof(outBuf) - strm.avail_out;
+					io->printf(io->context, "%x\r\n", have);
+					io->write(io->context, outBuf, have);
+					io->write(io->context, "\r\n", 2);
+
+				} while(strm.avail_out == 0);
+				assert(strm.avail_in == 0);
+			} while(flush != Z_FINISH);
+			assert(ret == Z_STREAM_END);
+deflate_error:
+			deflateEnd(&strm);
+			io->write(io->context, "0\r\n\r\n", 5);
+		}
+		else
+		{
+			char content_length[64];
+			snprintf(content_length, sizeof(content_length), "Content-Length: %ld", filesize);
+			const char *headers[] = {
+				"Content-Type: application/octet-stream",
+				content_length,
+				"Content-Encoding: gzip" // only when (accepts_gzip && compressed)
+			};
+
+			io->write_http_status(io->context, 200, "OK");
+			io->write_headers(io->context, headers, accepts_gzip && compressed ? 3 : 2);
+
+			char buffer[4096];
+			int n;
+
+			while(filesize > 0 &&
+				  (n = os_read(fd, buffer, sizeof(buffer) < filesize ? sizeof(buffer) : filesize)) > 0) {
+				io->write(io->context, buffer, n);
+				filesize -= n;
+			}
 		}
 	}
 	io->flush(io->context);
@@ -916,6 +982,7 @@ void git_lfs_server_handle_request(struct repo_manager *mgr,
 								   const struct git_lfs_repo *repo,
 								   struct socket_io *io,
 								   const char *authorization_header,
+								   int accepts_gzip,
 								   const char *method,
 								   const char *end_point,
 								   struct query_param_list *params)
@@ -1029,7 +1096,7 @@ void git_lfs_server_handle_request(struct repo_manager *mgr,
 	{
 		if(strncmp(end_point, "/download/", 10) == 0)
 		{
-			git_lfs_download(mgr, config, repo, io, end_point + 10);
+			git_lfs_download(mgr, config, repo, io, end_point + 10, accepts_gzip);
 		}
 		else if(strcmp(end_point, "/locks") == 0)
 		{

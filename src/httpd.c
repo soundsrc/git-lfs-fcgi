@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <fcgiapp.h>
 #include "mongoose.h"
 #include "compat/queue.h"
@@ -160,7 +161,8 @@ static void handle_request(struct thread_info *info,
 						   const char *authentication,
 						   const char *request_method,
 						   const char *uri,
-						   const char *query_string)
+						   const char *query_string,
+						   int accepts_gzip)
 {
 	// set some limits on HTTP input
 	if(authentication && strnlen(authentication, 256) >= 256)
@@ -272,7 +274,7 @@ error1:
 	
 	if(repo)
 	{
-		git_lfs_server_handle_request(info->repo_mgr, info->config, repo, io, authentication, request_method, end_point, &query_params);
+		git_lfs_server_handle_request(info->repo_mgr, info->config, repo, io, authentication, accepts_gzip, request_method, end_point, &query_params);
 	}
 	else
 	{
@@ -310,7 +312,7 @@ static int httpd_handle_request(struct mg_connection *conn)
 	
 	const char *authentication = mg_get_header(conn, "Authorization");
 
-	handle_request(info, &io, authentication, req->request_method, req->uri, req->query_string ? req->query_string : "");
+	handle_request(info, &io, authentication, req->request_method, req->uri, req->query_string ? req->query_string : "", 0);
 	
 	return 1;
 }
@@ -345,6 +347,32 @@ static void *fastcgi_handler_thread(void *data)
 		const char *script_name = FCGX_GetParam("SCRIPT_NAME", request.envp);
 		const char *authentication = FCGX_GetParam("HTTP_AUTHORIZATION", request.envp);
 		const char *query_string = FCGX_GetParam("QUERY_STRING", request.envp);
+		const char *accept_encoding = FCGX_GetParam("HTTP_ACCEPT_ENCODING", request.envp);
+		int accepts_gzip = 0;
+		if (accept_encoding)
+		{
+			char accept_encoding_copy[1024];
+			if (strlcpy(accept_encoding_copy, accept_encoding, sizeof(accept_encoding_copy)) < sizeof(accept_encoding_copy))
+			{
+				char *p = accept_encoding_copy;
+				char *encoding_weight;
+				while((encoding_weight = strsep(&p, ",")))
+				{
+					char *q = encoding_weight;
+					char *encoding = strsep(&q, ";");
+					if (encoding)
+					{
+						while (*encoding && isspace(*encoding)) ++encoding;
+						if (0 == strncmp(encoding, "gzip", 4) &&
+							(0 == encoding[4] || isspace(encoding[4])))
+						{
+							accepts_gzip = 1;
+							break;
+						}
+					}
+				}
+			}
+		}
 		
 		if(!request_method || !script_name || !query_string)
 		{
@@ -352,7 +380,7 @@ static void *fastcgi_handler_thread(void *data)
 		}
 		else
 		{
-			handle_request(info, &io, authentication, request_method, script_name, query_string);
+			handle_request(info, &io, authentication, request_method, script_name, query_string, accepts_gzip);
 		}
 
 		FCGX_Finish_r(&request);
