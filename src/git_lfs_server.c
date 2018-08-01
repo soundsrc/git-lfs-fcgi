@@ -456,7 +456,7 @@ static void git_lfs_download(struct repo_manager *mgr,
 	unsigned char inBuf[131072];
 	unsigned char outBuf[131072];
 	// if object is compressed and server does not accept gzip, decompress it on the fly
-	if (compressed && !accepts_gzip)
+	if (compressed && (!accepts_gzip || !repo->http_gzip))
 	{
 		int n, ret;
 		z_stream strm;
