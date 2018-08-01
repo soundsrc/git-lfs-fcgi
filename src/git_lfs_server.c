@@ -505,9 +505,12 @@ static void git_lfs_download(struct repo_manager *mgr,
 				}
 
 				int have = sizeof(outBuf) - strm.avail_out;
-				io->printf(io->context, "%x\r\n", have);
-				io->write(io->context, outBuf, have);
-				io->write(io->context, "\r\n", 2);
+				if (have > 0)
+				{
+					io->printf(io->context, "%X\r\n", have);
+					io->write(io->context, outBuf, have);
+					io->write(io->context, "\r\n", 2);
+				}
 			} while (strm.avail_out == 0);
 
 		} while (ret != Z_STREAM_END);
@@ -567,9 +570,12 @@ inflate_error:
 					}
 
 					int have = sizeof(outBuf) - strm.avail_out;
-					io->printf(io->context, "%x\r\n", have);
-					io->write(io->context, outBuf, have);
-					io->write(io->context, "\r\n", 2);
+					if (have > 0)
+					{
+						io->printf(io->context, "%X\r\n", have);
+						io->write(io->context, outBuf, have);
+						io->write(io->context, "\r\n", 2);
+					}
 
 				} while(strm.avail_out == 0);
 				assert(strm.avail_in == 0);
