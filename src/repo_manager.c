@@ -376,6 +376,15 @@ static int handle_cmd_check_oid(struct repo_manager *mgr, uint32_t cookie, const
 	memset(&resp, 0, sizeof(resp));
 	
 	resp.exist = os_file_exists(path);
+	if (!resp.exist)
+	{
+		char z_path[PATH_MAX];
+		if (snprintf(z_path, sizeof(z_path), "%s.gz", path) < sizeof(z_path))
+		{
+			resp.exist = os_file_exists(z_path);
+		}
+	}
+
 	if(git_lfs_repo_send_response(mgr, REPO_CMD_CHECK_OID_EXIST, cookie, &resp, sizeof(resp), NULL) < 0)
 	{
 		return -1;
@@ -629,7 +638,7 @@ static int handle_cmd_commit(struct repo_manager *mgr, const char *access_token,
 			int readBytes = os_read(srcfd, inBuf, sizeof(inBuf));
 			if (readBytes < 0)
 			{
-				git_lfs_repo_send_error_response(mgr, cookie, "Failed to read file.");
+				assert(0 && "Failed to read file.");
 				goto z_err3;
 			}
 
@@ -645,13 +654,13 @@ static int handle_cmd_commit(struct repo_manager *mgr, const char *access_token,
 				ret = deflate(&strm, flush);
 				if (ret == Z_STREAM_ERROR)
 				{
-					git_lfs_repo_send_error_response(mgr, cookie, "deflate() error.");
+					assert(0 && "deflate() error.");
 					goto z_err3;
 				}
 
 				if (os_write(destfd, outBuf, sizeof(outBuf) - strm.avail_out) < 0)
 				{
-					git_lfs_repo_send_error_response(mgr, cookie, "Error writing compressed file.");
+					assert(0 && "Error writing compressed file.");
 					goto z_err3;
 				}
 			} while(strm.avail_out == 0);
@@ -677,6 +686,8 @@ z_err2:
 					err = 1;
 				}
 
+				os_close(srcfd);
+				srcfd = -1;
 				if (!err && os_rename(z_tmp_path, upload->tmp_path) < 0)
 				{
 					git_lfs_repo_send_error_response(mgr, cookie, "Object %s failed rename.", oid_str);
@@ -687,7 +698,7 @@ z_err2:
 
 		os_unlink(z_tmp_path);
 z_err1:
-		os_close(srcfd);
+		if (srcfd >= 0) os_close(srcfd);
 z_err0:
 		if (err) goto done;
 	}
